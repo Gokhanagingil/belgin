@@ -21,7 +21,8 @@ import {
   resetOrder,
   isOrderComplete,
   orderProgress,
-  orderHint
+  orderHint,
+  orderMissionComplete
 } from "./order-core.js";
 import {
   defaultVillage,
@@ -44,11 +45,13 @@ const defaultSave = {
   score: 0,
   stars: 0,
   completed: [],
+  skipped: [],
   discovered: ["mavi", "nar", "limon"],
   onboardingSeen: false,
   wordOnboardingSeen: false,
   orderOnboardingSeen: false,
   villageSeen: false,
+  skipOrders: false,
   dailyCompleted: [],
   village: defaultVillage,
   currentGame: null
@@ -64,10 +67,15 @@ const defaultSettings = {
 
 let save = loadJson(STORAGE_KEY, defaultSave);
 save.village = normalizeVillage(save.village);
+save.skipped = Array.isArray(save.skipped) ? save.skipped : [];
 let settings = loadJson(SETTINGS_KEY, defaultSettings);
 let game = null;
 let toastTimer = null;
+let resultTimer = null;
+let resultCountdownTimer = null;
 let audioContext = null;
+
+if (skipOptionalOrder()) persist();
 
 function loadJson(key, fallback) {
   try {
@@ -135,6 +143,8 @@ function renderHome() {
   const meta = stageMeta(mode);
   const dayStep = (save.level - 1) % 3;
   const gift = idleGift(save.village);
+  const journeyCount = save.completed.length + save.skipped.length;
+  const orderSkipped = save.skipOrders || save.skipped.includes(day * 3 - 1);
   app.innerHTML = `<main class="app-shell"><section class="screen home-screen" aria-labelledby="home-title">
     <header class="home-topbar"><div class="brand-mark"><div class="brand-badge">${birdSvg(species[0], true)}</div><div><p class="eyebrow">Yaşayan bulmaca köyü</p><h1 class="brand-title" id="home-title">Kuş Köyü</h1></div></div><button class="icon-button" data-action="settings" aria-label="Ayarları aç">${icon("settings")}</button></header>
     <div class="resource-bar" aria-label="Köy kaynakları"><span title="Sağlam dal">🪵 <strong>${save.village.resources.dal}</strong></span><span title="Altın tohum">🌾 <strong>${save.village.resources.tohum}</strong></span><span title="Berrak damla">💧 <strong>${save.village.resources.damla}</strong></span><button data-action="village">Köyü geliştir</button></div>
@@ -144,10 +154,11 @@ function renderHome() {
       <button class="village-house house-green" data-action="village" aria-label="Günışığı Serası seviye ${save.village.buildings.sera}"><span>🌿</span><strong>${save.village.buildings.sera}</strong></button>
       <button class="village-house house-work" data-action="village" aria-label="Bahçe Atölyesi seviye ${save.village.buildings.atolye}"><span>🛠️</span><strong>${save.village.buildings.atolye}</strong></button>
       <div class="village-path" aria-hidden="true"></div><div class="village-bird" aria-hidden="true">${birdSvg(hero, true)}</div>
-      <div class="village-copy"><div class="hero-kicker">✦ BAHÇE GÜNÜ ${day}</div><h2>${meta.greeting}<br><span>${meta.title}</span></h2><p>${meta.copy}</p><button class="primary-button" data-action="play">${save.currentGame?.version === 4 ? "Kaldığın yerden devam et" : `${meta.icon} ${meta.button}`}</button></div>
+      <div class="village-copy"><div class="hero-kicker">✦ BAHÇE GÜNÜ ${day}</div><h2>${meta.greeting}<br><span>${meta.title}</span></h2><p>${meta.copy}</p><button class="primary-button" data-action="play">${canResumeGame() ? "Kaldığın yerden devam et" : `${meta.icon} ${meta.button}`}</button></div>
     </article>
     ${gift ? `<button class="idle-gift" data-action="collect-gift"><span>🎁</span><div><strong>Kuşlar seni beklerken çalıştı</strong><small>${gift.hours} saatlik köy hediyesini topla</small></div><b>Topla</b></button>` : ""}
-    <section class="day-route" aria-label="Bahçe Günü ${day} aşamaları"><div class="day-route-head"><div><span>Bugünün yolu</span><strong>${levelSubtitle(save.level)}</strong></div><em>${day}/400 gün</em></div><div class="route-steps">${["logic", "order", "word"].map((id, index) => { const item = stageMeta(id); return `<div class="route-step ${index < dayStep ? "is-done" : index === dayStep ? "is-current" : ""}"><span>${index < dayStep ? "✓" : item.icon}</span><small>${item.short}</small></div>`; }).join("")}</div><div class="progress-track"><div class="progress-fill" style="width:${Math.max(1, (save.completed.length / MAX_LEVEL) * 100)}%"></div></div></section>
+    <section class="day-route" aria-label="Bahçe Günü ${day} aşamaları"><div class="day-route-head"><div><span>Bugünün yolu</span><strong>${levelSubtitle(save.level)}</strong></div><em>${day}/400 gün</em></div><div class="route-steps">${["logic", "order", "word"].map((id, index) => { const item = stageMeta(id); const isSkipped = id === "order" && orderSkipped; return `<div class="route-step ${isSkipped ? "is-skipped" : index < dayStep ? "is-done" : index === dayStep ? "is-current" : ""}"><span>${isSkipped ? "—" : index < dayStep ? "✓" : item.icon}</span><small>${isSkipped ? "Öğle · isteğe bağlı" : item.short}</small></div>`; }).join("")}</div><div class="progress-track"><div class="progress-fill" style="width:${Math.max(1, (journeyCount / MAX_LEVEL) * 100)}%"></div></div></section>
+    <section class="route-choice" aria-labelledby="route-choice-title"><div><span>OYUN YOLU</span><strong id="route-choice-title">${save.skipOrders ? "Mantık + Sözcük" : "Üçlü Bahçe Günü"}</strong><p>${save.skipOrders ? "Siparişlere uğramadan iki sevdiğin oyunla ilerle." : "Kuş Düzeni, Atölye ve Gizli Sözcük birlikte ilerler."}</p></div><div class="route-choice-buttons" role="group" aria-label="Oyun yolu seçimi"><button data-route="classic" aria-pressed="${save.skipOrders}" class="${save.skipOrders ? "is-active" : ""}">🧩 + 🔤 İki oyun</button><button data-route="full" aria-pressed="${!save.skipOrders}" class="${save.skipOrders ? "" : "is-active"}">🧺 dahil Üç oyun</button></div></section>
     <div class="quick-grid"><button class="quick-card" data-action="daily"><span class="mini-icon">☀️</span><strong>Günün görevi</strong><span>Her gün değişen özel bir köy bulmacası</span></button><button class="quick-card" data-action="album"><span class="mini-icon">🪶</span><strong>Kuş albümü</strong><span>${save.discovered.length} kuş keşfedildi</span></button></div>
   </section></main>`;
   bindCommonActions();
@@ -155,13 +166,40 @@ function renderHome() {
 }
 
 function startGame(daily = false) {
-  if (!daily && save.currentGame?.version === 4 && save.currentGame.status === "playing" && save.currentGame.level === save.level) game = save.currentGame;
+  if (!daily && canResumeGame()) game = save.currentGame;
   else game = createStage(save.level, daily);
   renderGame();
 }
 
+function canResumeGame() {
+  const saved = save.currentGame;
+  return saved?.version === 4
+    && saved.status === "playing"
+    && saved.level === save.level
+    && (saved.mode !== "order" || saved.orderVersion === 2);
+}
+
+function skipOptionalOrder() {
+  if (!save.skipOrders || stageForLevel(save.level) !== "order") return false;
+  if (!save.skipped.includes(save.level)) save.skipped.push(save.level);
+  save.level = Math.min(MAX_LEVEL, save.level + 1);
+  save.currentGame = null;
+  return true;
+}
+
+function setRoutePreference(route) {
+  const skipOrders = route === "classic";
+  if (save.skipOrders === skipOrders) return;
+  save.skipOrders = skipOrders;
+  skipOptionalOrder();
+  persist();
+  renderHome();
+  showToast(skipOrders ? "Mantık + Sözcük yolu seçildi." : "Atölye yeniden Bahçe Gününe eklendi.");
+}
+
 function createStage(level, daily = false) {
-  const mode = stageForLevel(level, daily);
+  let mode = stageForLevel(level, daily);
+  if (daily && save.skipOrders && mode === "order") mode = new Date().getUTCDate() % 2 ? "logic" : "word";
   const stage = mode === "logic" ? makeLogicStage(level, daily) : mode === "order" ? makeOrderStage(level, daily) : makeWordStage(level, daily);
   stage.dateKey = new Date().toISOString().slice(0, 10);
   return stage;
@@ -228,6 +266,7 @@ function bindCommonActions() {
   document.querySelector('[data-action="album"]')?.addEventListener("click", openAlbum);
   document.querySelectorAll('[data-action="village"]').forEach((button) => button.addEventListener("click", openVillage));
   document.querySelector('[data-action="collect-gift"]')?.addEventListener("click", collectGift);
+  document.querySelectorAll("[data-route]").forEach((button) => button.addEventListener("click", () => setRoutePreference(button.dataset.route)));
 }
 
 function bindGameActions() {
@@ -343,8 +382,9 @@ function renderOrderGame() {
   app.innerHTML = `<main class="app-shell"><section class="screen game-screen order-screen" aria-labelledby="level-title">
     ${gameHeader("Öğle · Atölye siparişleri")}
     <div class="progress-wrap" aria-label="Sipariş ilerlemesi yüzde ${percent}"><div class="progress-track"><div class="progress-fill" style="width:${percent}%"></div></div><div class="progress-label">${progress.delivered}/${progress.total}</div></div>
-    <aside class="mission-card ${game.moves <= game.optimalMoves ? "is-safe" : ""}"><span class="mission-medal">✦</span><div><strong>Usta üretici</strong><span>${game.optimalMoves} üretim hamlesinde tamamlamayı dene · Şu an ${game.moves}</span></div></aside>
-    <section class="orders-panel" aria-labelledby="orders-title"><div class="section-title"><div><span>Köy meydanı</span><h2 id="orders-title">Bekleyen siparişler</h2></div><em>${game.orders.filter((order) => order.delivered >= order.required).length}/${game.orders.length}</em></div><div class="order-cards">${game.orders.map((order) => { const item = workshopItems[order.productId]; const done = order.delivered >= order.required; return `<article class="order-card ${done ? "is-done" : ""}"><span class="order-icon">${done ? "✓" : item.icon}</span><div><strong>${item.name}</strong><small>${order.delivered}/${order.required} hazır</small></div></article>`; }).join("")}</div></section>
+    <aside class="mission-card ${orderMissionComplete(game) ? "is-safe" : ""}"><span class="mission-medal">✦</span><div><strong>${game.mission.title}</strong><span>${game.mission.copy}</span></div></aside>
+    <aside class="order-story"><span>${game.story.icon}</span><div><small>BUGÜNÜN HİKÂYESİ</small><strong>${game.story.title}</strong><p>${game.story.copy}</p></div></aside>
+    <section class="orders-panel" aria-labelledby="orders-title"><div class="section-title"><div><span>Köy meydanı</span><h2 id="orders-title">Bugünün misafirleri</h2></div><em>${game.orders.filter((order) => order.delivered >= order.required).length}/${game.orders.length}</em></div><div class="order-cards">${game.orders.map((order) => { const item = workshopItems[order.productId]; const customer = birdById(order.customerId); const done = order.delivered >= order.required; return `<article class="order-card ${done ? "is-done" : ""}"><span class="customer-avatar">${done ? "<b>✓</b>" : birdSvg(customer, true)}</span><div class="order-card-copy"><small>${order.customerName} · ${order.note}</small><strong>${item.icon} ${item.name}</strong><em>${order.delivered}/${order.required} hazır</em></div></article>`; }).join("")}</div></section>
     <section class="workshop-panel" aria-labelledby="workshop-title"><div class="section-title"><div><span>Malzeme rafı</span><h2 id="workshop-title">Atölyede üret</h2></div></div><div class="ingredient-shelf">${inventoryItems.map(([id, count]) => { const item = workshopItems[id]; return `<div class="ingredient-chip" aria-label="${item.name}, ${count} adet"><span>${item.icon}</span><small>${item.name}</small><strong>${count}</strong></div>`; }).join("")}</div><div class="recipe-grid">${recipes.map(recipeMarkup).join("")}</div></section>
     ${!save.orderOnboardingSeen ? '<div class="order-coach" role="status"><strong>Siparişler birkaç üretim adımı isteyebilir.</strong><br>Örneğin sepetten önce iplik hazırla. Malzemeleri ortak kullandığın için sıranı planla.</div>' : ""}
     <div class="power-row"><button class="power-button" data-action="order-undo" ${game.history.length ? "" : "disabled"}>${icon("undo")}<span>Geri al</span></button><button class="power-button" data-action="order-reset">${icon("clear")}<span>Baştan başla</span></button><button class="power-button" data-action="order-hint">${icon("hint")}<span>Sıradaki adım</span></button></div>
@@ -488,8 +528,8 @@ function wordHint() {
 function finishStage() {
   game.status = "won";
   game.busy = false;
-  const careful = game.mode === "logic" ? missionComplete(game) : game.mode === "order" ? game.moves <= game.optimalMoves : game.wordState.attempts <= 1;
-  const mastery = game.helpsUsed === 0 && (game.mode !== "order" || game.resetCount === 0);
+  const careful = game.mode === "logic" ? missionComplete(game) : game.mode === "order" ? orderMissionComplete(game) : game.wordState.attempts <= 1;
+  const mastery = game.helpsUsed === 0 && (game.mode !== "order" || (game.resetCount === 0 && game.moves <= game.optimalMoves));
   game.earnedStars = 1 + (careful ? 1 : 0) + (mastery ? 1 : 0);
   game.completedDay = !game.daily && game.level % 3 === 0;
   const rewardAllowed = !game.daily || !save.dailyCompleted.includes(game.dateKey);
@@ -506,12 +546,14 @@ function finishStage() {
     if (game.mode === "logic") for (const id of game.speciesIds) if (!save.discovered.includes(id)) save.discovered.push(id);
     save.level = Math.min(MAX_LEVEL, save.level + 1);
     save.currentGame = null;
+    skipOptionalOrder();
   }
   persist();
   openResult();
 }
 
 function openResult() {
+  clearResultTimers();
   const backdrop = document.createElement("div");
   const bird = species[(game.level + 1) % species.length];
   const result = game.mode === "logic"
@@ -521,12 +563,42 @@ function openResult() {
       : { kicker: `${game.wordState.word} bulundu`, title: "Bahçe konuştu!", copy: "Gizli sözcüğü çözdün ve Çınar Kütüphanesi için berrak damlalar kazandın." };
   const nextMeta = !game.daily && game.level < MAX_LEVEL ? stageMeta(stageForLevel(save.level)) : null;
   const rewardLine = Object.entries(game.reward).filter(([, amount]) => amount > 0).map(([id, amount]) => `${{ dal: "🪵", tohum: "🌾", damla: "💧" }[id]} +${amount}`).join("  ");
-  backdrop.className = "modal-backdrop";
-  backdrop.innerHTML = `<section class="modal result-copy" role="dialog" aria-modal="true" aria-labelledby="result-title"><div class="result-illustration">${birdSvg(bird, true)}</div><div class="stars">${"★ ".repeat(game.earnedStars)}${"· ".repeat(3 - game.earnedStars)}</div><p class="eyebrow">${result.kicker}</p><h2 id="result-title">${result.title}</h2><p>${result.copy}</p>${game.completedDay ? '<div class="day-complete-ribbon">☀ Bahçe Günü tamamlandı</div>' : ""}<div class="result-breakdown"><span>Köy ödülü</span><strong>${rewardLine || "Bugün alındı"}</strong><span>Yaprak puanı</span><strong>+${game.reward && rewardLine ? 35 + game.earnedStars * 15 : 0}</strong></div><div class="modal-actions"><button class="primary-button" data-result="primary">${game.daily || game.level === MAX_LEVEL || game.completedDay ? "Kuş Köyüne dön" : `${nextMeta.icon} ${nextMeta.button}`}</button><button class="secondary-button" data-result="home">Şimdi ara ver</button></div></section>`;
+  const returnsHome = game.daily || game.level === MAX_LEVEL || game.completedDay;
+  const autoCopy = returnsHome ? "Kuş Köyüne otomatik dönülüyor" : `${nextMeta.short} aşaması otomatik açılıyor`;
+  backdrop.className = `modal-backdrop ${settings.reduceMotion ? "reduce-motion" : ""}`;
+  backdrop.innerHTML = `<section class="modal result-copy" role="dialog" aria-modal="true" aria-labelledby="result-title"><div class="result-illustration">${birdSvg(bird, true)}</div><div class="stars">${"★ ".repeat(game.earnedStars)}${"· ".repeat(3 - game.earnedStars)}</div><p class="eyebrow">${result.kicker}</p><h2 id="result-title">${result.title}</h2><p>${result.copy}</p>${game.completedDay ? '<div class="day-complete-ribbon">☀ Bahçe Günü tamamlandı</div>' : ""}<div class="result-breakdown"><span>Köy ödülü</span><strong>${rewardLine || "Bugün alındı"}</strong><span>Yaprak puanı</span><strong>+${game.reward && rewardLine ? 35 + game.earnedStars * 15 : 0}</strong></div><div class="auto-continue" role="status"><strong>${autoCopy} · <b data-auto-seconds>4</b></strong><div class="auto-track" aria-hidden="true"><i></i></div></div><div class="modal-actions"><button class="primary-button" data-result="primary">${returnsHome ? "Hemen Kuş Köyüne dön" : `${nextMeta.icon} Hemen ${nextMeta.button.toLocaleLowerCase("tr-TR")}`}</button><button class="secondary-button" data-result="home">Şimdi ara ver</button></div></section>`;
   document.body.append(backdrop);
-  backdrop.querySelector('[data-result="primary"]').addEventListener("click", () => { backdrop.remove(); if (game.daily || game.level === MAX_LEVEL || game.completedDay) renderHome(); else { game = createStage(save.level); renderGame(); } });
-  backdrop.querySelector('[data-result="home"]').addEventListener("click", () => { backdrop.remove(); renderHome(); });
+  const continueJourney = () => {
+    clearResultTimers();
+    if (!backdrop.isConnected) return;
+    backdrop.remove();
+    if (returnsHome) renderHome();
+    else {
+      game = createStage(save.level);
+      renderGame();
+    }
+  };
+  backdrop.querySelector('[data-result="primary"]').addEventListener("click", continueJourney);
+  backdrop.querySelector('[data-result="home"]').addEventListener("click", () => {
+    clearResultTimers();
+    backdrop.remove();
+    renderHome();
+  });
+  let seconds = 4;
+  resultCountdownTimer = setInterval(() => {
+    seconds -= 1;
+    const counter = backdrop.querySelector("[data-auto-seconds]");
+    if (counter) counter.textContent = Math.max(0, seconds);
+  }, 1000);
+  resultTimer = setTimeout(continueJourney, 4000);
   backdrop.querySelector("button")?.focus();
+}
+
+function clearResultTimers() {
+  clearTimeout(resultTimer);
+  clearInterval(resultCountdownTimer);
+  resultTimer = null;
+  resultCountdownTimer = null;
 }
 
 function levelSubtitle(level) {

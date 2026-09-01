@@ -14,22 +14,50 @@ export const workshopItems = {
   kurabiye: { id: "kurabiye", name: "Tohum kurabiyesi", icon: "🍪" },
   kus_evi: { id: "kus_evi", name: "Minik kuş evi", icon: "🏠" },
   cicek_demeti: { id: "cicek_demeti", name: "Bahçe demeti", icon: "💐" },
+  meyve_tabagi: { id: "meyve_tabagi", name: "Meyve tabağı", icon: "🍇" },
+  tohum_kesesi: { id: "tohum_kesesi", name: "Tohum kesesi", icon: "🎒" },
+  yuva_yastigi: { id: "yuva_yastigi", name: "Yuva yastığı", icon: "🛏️" },
   recel: { id: "recel", name: "Orman reçeli", icon: "🍯" },
   pasta: { id: "pasta", name: "Meyveli pasta", icon: "🍰" }
 };
 
 export const workshopRecipes = [
-  { id: "cay_ozu", output: "cay_ozu", inputs: ["meyve", "su"], station: "Çaydanlık", tier: 1 },
-  { id: "iplik", output: "iplik", inputs: ["yaprak", "tuy"], station: "Dokuma", tier: 1 },
-  { id: "hamur", output: "hamur", inputs: ["tohum", "su"], station: "Değirmen", tier: 1 },
-  { id: "sicak_cay", output: "sicak_cay", inputs: ["cay_ozu", "su"], station: "Çaydanlık", tier: 1, final: true },
-  { id: "kus_evi", output: "kus_evi", inputs: ["dal", "dal"], station: "Marangoz", tier: 1, final: true },
-  { id: "sepet", output: "sepet", inputs: ["dal", "iplik"], station: "Marangoz", tier: 2, final: true },
-  { id: "battaniye", output: "battaniye", inputs: ["iplik", "tuy"], station: "Dokuma", tier: 2, final: true },
-  { id: "kurabiye", output: "kurabiye", inputs: ["hamur", "meyve"], station: "Fırın", tier: 2, final: true },
-  { id: "cicek_demeti", output: "cicek_demeti", inputs: ["yaprak", "meyve"], station: "Çiçek masası", tier: 3, final: true },
-  { id: "recel", output: "recel", inputs: ["cay_ozu", "meyve"], station: "Bakır tencere", tier: 3, final: true },
-  { id: "pasta", output: "pasta", inputs: ["hamur", "cay_ozu"], station: "Fırın", tier: 4, final: true }
+  { id: "cay_ozu", output: "cay_ozu", inputs: ["meyve", "su"], station: "Çaydanlık", unlockDay: 1 },
+  { id: "iplik", output: "iplik", inputs: ["yaprak", "tuy"], station: "Dokuma", unlockDay: 1 },
+  { id: "hamur", output: "hamur", inputs: ["tohum", "su"], station: "Değirmen", unlockDay: 1 },
+  { id: "sicak_cay", output: "sicak_cay", inputs: ["cay_ozu", "su"], station: "Çaydanlık", unlockDay: 1, final: true },
+  { id: "kus_evi", output: "kus_evi", inputs: ["dal", "dal"], station: "Marangoz", unlockDay: 1, final: true },
+  { id: "cicek_demeti", output: "cicek_demeti", inputs: ["yaprak", "meyve"], station: "Çiçek masası", unlockDay: 1, final: true },
+  { id: "meyve_tabagi", output: "meyve_tabagi", inputs: ["meyve", "meyve"], station: "Hazırlık masası", unlockDay: 1, final: true },
+  { id: "tohum_kesesi", output: "tohum_kesesi", inputs: ["tohum", "yaprak"], station: "Paketleme", unlockDay: 1, final: true },
+  { id: "yuva_yastigi", output: "yuva_yastigi", inputs: ["tuy", "tuy"], station: "Dokuma", unlockDay: 1, final: true },
+  { id: "kurabiye", output: "kurabiye", inputs: ["hamur", "meyve"], station: "Fırın", unlockDay: 2, final: true },
+  { id: "sepet", output: "sepet", inputs: ["dal", "iplik"], station: "Marangoz", unlockDay: 3, final: true },
+  { id: "battaniye", output: "battaniye", inputs: ["iplik", "tuy"], station: "Dokuma", unlockDay: 4, final: true },
+  { id: "recel", output: "recel", inputs: ["cay_ozu", "meyve"], station: "Bakır tencere", unlockDay: 5, final: true },
+  { id: "pasta", output: "pasta", inputs: ["hamur", "cay_ozu"], station: "Fırın", unlockDay: 7, final: true }
+];
+
+export const workshopCustomers = [
+  { birdId: "mavi", name: "Maviş", notes: ["Yavruların sofrası için", "Yeni yuvasına götürecek"] },
+  { birdId: "nar", name: "Nar Bülbülü", notes: ["Komşusuna sürpriz yapacak", "Meydan buluşması için"] },
+  { birdId: "limon", name: "Limon İspinozu", notes: ["Uzun bahçe yürüyüşü için", "Ailesiyle paylaşacak"] },
+  { birdId: "leylak", name: "Leylak Kuşu", notes: ["Şenlik masasına götürecek", "Misafirlerini karşılayacak"] },
+  { birdId: "zeytin", name: "Zeytin Baştankarası", notes: ["Yağmur öncesi hazırlanıyor", "Yeni komşusunu ağırlayacak"] },
+  { birdId: "mercan", name: "Mercan Kuşu", notes: ["Koru pikniği için", "Dostuna hediye edecek"] },
+  { birdId: "gece", name: "Gece Sakası", notes: ["Akşam nöbeti için", "Kütüphane buluşmasına götürecek"] },
+  { birdId: "turkuaz", name: "Turkuaz Ardıç", notes: ["Göç molasında paylaşacak", "Bahçe ekibine teşekkür edecek"] }
+];
+
+export const workshopStories = [
+  { icon: "🌤️", title: "Meydan Sabahı", copy: "Kuşlar güne birlikte başlıyor; sofralar için farklı hazırlıklar gerekiyor." },
+  { icon: "🧺", title: "Koru Pikniği", copy: "Herkes yanına başka bir şey almak istiyor. Malzemeleri dikkatle paylaştır." },
+  { icon: "🏡", title: "Yeni Komşular", copy: "Köye yeni kuşlar taşındı. Yuvaları için sıcak bir karşılama hazırla." },
+  { icon: "🌧️", title: "Yağmur Hazırlığı", copy: "Bulutlar yaklaşırken kuşlar eksiklerini tamamlamak için atölyeye uğradı." },
+  { icon: "🎈", title: "Bahçe Şenliği", copy: "Meydandaki uzun masa renkli ürünlerle dolmayı bekliyor." },
+  { icon: "📚", title: "Kütüphane Günü", copy: "Sessiz okuma buluşmasına küçük ikramlar ve rahat yuvalıklar hazırlanıyor." },
+  { icon: "🪶", title: "Göç Molası", copy: "Yolcu kuşlar kısa bir mola verdi. İhtiyaçlarını doğru sırayla tamamla." },
+  { icon: "🌙", title: "Akşam Buluşması", copy: "Gün batmadan son siparişleri yetiştirip meydanı huzurla kapat." }
 ];
 
 const recipeByOutput = Object.fromEntries(workshopRecipes.map((recipe) => [recipe.output, recipe]));
@@ -42,27 +70,36 @@ export function makeOrderStage(level, daily = false, date = new Date()) {
   const day = Math.ceil(level / 3);
   const seed = daily ? Number(date.toISOString().slice(0, 10).replaceAll("-", "")) : level * 811 + 73;
   const rng = seededRandom(seed);
-  const maxTier = day < 8 ? 1 : day < 25 ? 2 : day < 80 ? 3 : 4;
-  const available = workshopRecipes.filter((recipe) => recipe.final && recipe.tier <= maxTier);
-  const lineCount = day < 6 ? 2 : day < 45 ? 3 : 4;
-  const shuffled = shuffle([...available], rng);
-  const orders = shuffled.slice(0, Math.min(lineCount, shuffled.length)).map((recipe) => ({
+  const available = finalRecipesForDay(day);
+  const lineCount = day < 4 ? 2 : day < 21 ? 3 : 4;
+  const selectedRecipes = pickOrderRecipes(available, lineCount, seed);
+  const customers = shuffle([...workshopCustomers], rng);
+  const orders = selectedRecipes.map((recipe, index) => ({
     productId: recipe.output,
-    required: day > 15 && rng() > .72 ? 2 : 1,
-    delivered: 0
+    required: day > 12 && rng() > .76 ? 2 : 1,
+    delivered: 0,
+    customerId: customers[index].birdId,
+    customerName: customers[index].name,
+    note: customers[index].notes[(day + index) % customers[index].notes.length]
   }));
   const rawInventory = Object.fromEntries(rawIds.map((id) => [id, 0]));
   const solutionPlan = [];
   for (const order of orders) {
     for (let copy = 0; copy < order.required; copy += 1) expandRequirements(order.productId, rawInventory, solutionPlan);
   }
-  if (day > 10) {
+  const missionType = ["optimal", "noHint", "noReset", "reserve"][(daily ? seed : day - 1) % 4];
+  const reserve = missionType === "reserve" ? { id: rawIds[Math.floor(rng() * rawIds.length)], count: 1 } : null;
+  if (reserve) rawInventory[reserve.id] += reserve.count;
+  if (day > 3) {
     rawInventory[rawIds[Math.floor(rng() * rawIds.length)]] += 1;
-    if (day > 60) rawInventory[rawIds[Math.floor(rng() * rawIds.length)]] += 1;
+    if (day > 30) rawInventory[rawIds[Math.floor(rng() * rawIds.length)]] += 1;
   }
   const inventory = Object.fromEntries(Object.keys(workshopItems).map((id) => [id, rawInventory[id] || 0]));
+  const availableRecipeIds = visibleRecipeIds(selectedRecipes, available, day, seed);
+  const mission = makeMission(missionType, solutionPlan.length, reserve);
   return {
     version: 4,
+    orderVersion: 2,
     mode: "order",
     level,
     day,
@@ -71,15 +108,52 @@ export function makeOrderStage(level, daily = false, date = new Date()) {
     inventory,
     initialInventory: { ...inventory },
     orders,
+    story: workshopStories[(daily ? seed : day - 1) % workshopStories.length],
+    mission,
+    reserve,
     solutionPlan,
     optimalMoves: solutionPlan.length,
     moves: 0,
     helpsUsed: 0,
     resetCount: 0,
     history: [],
-    availableRecipeIds: workshopRecipes.filter((recipe) => recipe.tier <= maxTier).map((recipe) => recipe.id),
+    availableRecipeIds,
     busy: false
   };
+}
+
+function finalRecipesForDay(day) {
+  return workshopRecipes.filter((recipe) => recipe.final && recipe.unlockDay <= day);
+}
+
+function pickOrderRecipes(available, lineCount, seed) {
+  return shuffle([...available], seededRandom(seed)).slice(0, Math.min(lineCount, available.length));
+}
+
+function visibleRecipeIds(selected, available, day, seed) {
+  const visible = new Set();
+  const addPath = (productId) => {
+    const recipe = recipeByOutput[productId];
+    if (!recipe || recipe.unlockDay > day || visible.has(recipe.id)) return;
+    visible.add(recipe.id);
+    recipe.inputs.forEach(addPath);
+  };
+  selected.forEach((recipe) => addPath(recipe.output));
+  const selectedIds = new Set(selected.map((recipe) => recipe.id));
+  const decoys = shuffle(available.filter((recipe) => !selectedIds.has(recipe.id)), seededRandom(seed + 991))
+    .slice(0, day < 10 ? 1 : 2);
+  decoys.forEach((recipe) => addPath(recipe.output));
+  return [...visible];
+}
+
+function makeMission(type, optimalMoves, reserve) {
+  if (type === "noHint") return { type, title: "Kendi planın", copy: "Sıradaki adım desteğini kullanmadan tamamla." };
+  if (type === "noReset") return { type, title: "Tek hazırlık", copy: "Atölyeyi baştan başlatmadan siparişleri tamamla." };
+  if (type === "reserve") {
+    const item = workshopItems[reserve.id];
+    return { type, title: "Ambar payı", copy: `${item.icon} ${item.name} malzemesinden ${reserve.count} adet artır.` };
+  }
+  return { type, title: "İsrafsız üretim", copy: `Tam olarak ${optimalMoves} üretim hamlesinde tamamla.` };
 }
 
 function expandRequirements(productId, rawInventory, plan) {
@@ -141,6 +215,13 @@ export function orderProgress(state) {
   const delivered = state.orders.reduce((sum, order) => sum + order.delivered, 0);
   const total = state.orders.reduce((sum, order) => sum + order.required, 0);
   return { delivered, total };
+}
+
+export function orderMissionComplete(state) {
+  if (state.mission.type === "noHint") return state.helpsUsed === 0;
+  if (state.mission.type === "noReset") return state.resetCount === 0;
+  if (state.mission.type === "reserve") return (state.inventory[state.reserve.id] || 0) >= state.reserve.count;
+  return state.moves <= state.optimalMoves;
 }
 
 export function orderHint(state) {
