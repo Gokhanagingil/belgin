@@ -3,12 +3,12 @@ import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { Window } from "happy-dom";
 import { makeLogicStage, makeWordStage, species } from "../src/game-core.js";
-import { makeOrderStage } from "../src/order-core.js";
 
 const pause = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function bootApp({ save } = {}) {
+async function bootApp({ save, wakeLock } = {}) {
   const window = new Window({ url: "https://kus-bahcesi.test/" });
+  if (wakeLock) Object.defineProperty(window.navigator, "wakeLock", { configurable: true, value: wakeLock });
   window.localStorage.setItem("kus-bahcesi-settings-v1", JSON.stringify({
     sound: false,
     haptics: false,
@@ -37,17 +37,6 @@ async function solveLogic(document, levelNumber) {
   await pause();
 }
 
-async function solveOrder(document, levelNumber) {
-  for (const recipeId of makeOrderStage(levelNumber).solutionPlan) {
-    const recipe = document.querySelector(`[data-recipe="${recipeId}"]`);
-    assert.ok(recipe, `recipe ${recipeId} should be visible`);
-    assert.equal(recipe.disabled, false, `recipe ${recipeId} should be craftable`);
-    recipe.click();
-    await pause(2);
-  }
-  await pause();
-}
-
 async function solveWord(document, levelNumber) {
   const targetWord = makeWordStage(levelNumber).wordState.word;
   for (const character of targetWord) {
@@ -67,13 +56,14 @@ test("production output targets the GitHub Pages project path", async () => {
   assert.match(html, /\/belgin\/icon\.svg/);
 });
 
-test("one garden day connects logic, workshop, word and village progression", async () => {
+test("one garden day connects logic, word and village progression", async () => {
   const window = await bootApp();
   const { document } = window;
 
   assert.match(document.body.textContent, /Kuş Köyü/);
   assert.match(document.body.textContent, /1\/400 gün/);
-  assert.equal(document.querySelectorAll(".route-step").length, 3);
+  assert.equal(document.querySelectorAll(".route-step").length, 2);
+  assert.equal(document.querySelectorAll("[data-route]").length, 0);
   assert.ok(document.querySelector('[aria-label="Köy kaynakları"]'));
 
   document.querySelector('[data-action="play"]').click();
@@ -86,18 +76,9 @@ test("one garden day connects logic, workshop, word and village progression", as
   assert.match(document.querySelector(".result-copy").textContent, /Bahçe dengelendi/);
   assert.match(document.querySelector(".result-breakdown").textContent, /Köy ödülü/);
   assert.match(document.querySelector(".auto-continue").textContent, /otomatik açılıyor/);
-  assert.equal(JSON.parse(window.localStorage.getItem("kus-bahcesi-save-v1")).level, 2);
+  assert.equal(JSON.parse(window.localStorage.getItem("kus-bahcesi-save-v1")).level, 3);
 
   await pause(4200);
-  assert.ok(document.querySelector(".order-screen"));
-  assert.match(document.body.textContent, /Bugünün misafirleri/);
-  assert.match(document.body.textContent, /BUGÜNÜN HİKÂYESİ/);
-  assert.ok(document.querySelectorAll(".recipe-card").length >= 3);
-
-  await solveOrder(document, 2);
-  assert.match(document.querySelector(".result-copy").textContent, /Atölye şenlendi/);
-
-  document.querySelector('[data-result="primary"]').click();
   assert.ok(document.querySelector(".word-stage"));
   assert.match(document.body.textContent, /Gizli sözcüğü bul/);
 
@@ -138,7 +119,7 @@ test("an unfinished placement resumes exactly where it was left", async () => {
   window.close();
 });
 
-test("a legacy in-progress puzzle never corrupts the new three-stage journey", async () => {
+test("a legacy in-progress puzzle never corrupts the current journey", async () => {
   const window = await bootApp({
     save: {
       level: 1,
@@ -154,7 +135,7 @@ test("a legacy in-progress puzzle never corrupts the new three-stage journey", a
   window.close();
 });
 
-test("an old repetitive workshop save is replaced by the varied workshop", async () => {
+test("an in-progress workshop save is discarded and resumes at the word game", async () => {
   const window = await bootApp({
     save: {
       level: 2,
@@ -164,29 +145,64 @@ test("an old repetitive workshop save is replaced by the varied workshop", async
   });
   const { document } = window;
   assert.doesNotMatch(document.querySelector('[data-action="play"]').textContent, /Kaldığın yerden/);
+  const stored = JSON.parse(window.localStorage.getItem("kus-bahcesi-save-v1"));
+  assert.equal(stored.level, 3);
+  assert.deepEqual(stored.skipped, [2]);
+  assert.equal(stored.currentGame, null);
   document.querySelector('[data-action="play"]').click();
-  assert.ok(document.querySelector(".order-story"));
-  assert.equal(document.querySelectorAll(".customer-avatar").length, 2);
+  assert.ok(document.querySelector(".word-stage"));
+  assert.equal(document.querySelectorAll(".order-screen").length, 0);
   window.close();
 });
 
-test("the two-game route skips workshop and opens the word stage", async () => {
+test("a legacy full-route preference cannot re-enable the workshop", async () => {
   const window = await bootApp({
     save: {
-      level: 2,
-      completed: [1],
+      level: 1,
+      skipOrders: false,
       village: { resources: { dal: 8, tohum: 5, damla: 5 }, buildings: { konak: 1, sera: 1, atolye: 1, kutuphane: 1 } }
     }
   });
   const { document } = window;
-  document.querySelector('[data-route="classic"]').click();
-  assert.equal(document.querySelector('[data-route="classic"]').getAttribute("aria-pressed"), "true");
-  assert.ok(document.querySelector(".route-step.is-skipped"));
-  assert.match(document.body.textContent, /Siparişlere uğramadan/);
+  assert.equal(document.querySelectorAll("[data-route]").length, 0);
+  assert.equal(document.querySelectorAll(".route-step").length, 2);
+  assert.doesNotMatch(document.body.textContent, /Sipariş|Üçlü Bahçe Günü/);
   const stored = JSON.parse(window.localStorage.getItem("kus-bahcesi-save-v1"));
-  assert.equal(stored.level, 3);
-  assert.deepEqual(stored.skipped, [2]);
+  assert.equal(stored.skipOrders, true);
   document.querySelector('[data-action="play"]').click();
-  assert.ok(document.querySelector(".word-stage"));
+  assert.ok(document.querySelector(".logic-screen"));
+  window.close();
+});
+
+test("active gameplay keeps the screen awake and releases it at home", async () => {
+  let requests = 0;
+  let releases = 0;
+  const sentinel = new EventTarget();
+  sentinel.released = false;
+  sentinel.release = async () => {
+    if (sentinel.released) return;
+    sentinel.released = true;
+    releases += 1;
+    sentinel.dispatchEvent(new Event("release"));
+  };
+  const window = await bootApp({
+    wakeLock: {
+      request: async (type) => {
+        assert.equal(type, "screen");
+        requests += 1;
+        return sentinel;
+      }
+    }
+  });
+  const { document } = window;
+  document.querySelector('[data-action="settings"]').click();
+  assert.equal(document.querySelector('[name="keepAwake"]').checked, true);
+  document.querySelector("[data-close]").click();
+  document.querySelector('[data-action="play"]').click();
+  await pause();
+  assert.equal(requests, 1);
+  document.querySelector('[data-action="home"]').click();
+  await pause();
+  assert.equal(releases, 1);
   window.close();
 });

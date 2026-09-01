@@ -26,7 +26,7 @@ import {
 } from "../src/order-core.js";
 import { applyReward, canUpgrade, collectIdleGift, defaultVillage, normalizeVillage, stageReward, upgradeBuilding } from "../src/village-core.js";
 
-test("1,200 stages form exactly 400 three-part garden days", () => {
+test("the stage catalog retains 400 days and dormant workshop levels", () => {
   const modes = { logic: 0, order: 0, word: 0 };
   for (let level = 1; level <= MAX_LEVEL; level += 1) modes[stageForLevel(level)] += 1;
   assert.deepEqual(modes, { logic: 400, order: 400, word: 400 });
