@@ -1,8 +1,11 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  base: "/belgin/",
+  base: process.env.CAPACITOR_BUILD === "1" ? "./" : "/belgin/",
   build: {
-    sourcemap: true
+    sourcemap: true,
+    rollupOptions: {
+      output: { inlineDynamicImports: true }
+    }
   }
 });

@@ -51,9 +51,11 @@ async function solveWord(document, levelNumber) {
 
 test("production output targets the GitHub Pages project path", async () => {
   const html = await readFile(new URL("../dist/index.html", import.meta.url), "utf8");
+  const privacy = await readFile(new URL("../dist/privacy.html", import.meta.url), "utf8");
   assert.match(html, /\/belgin\/assets\//);
   assert.match(html, /\/belgin\/manifest\.webmanifest/);
   assert.match(html, /\/belgin\/icon\.svg/);
+  assert.match(privacy, /Gizlilik Politikası/);
 });
 
 test("one garden day connects logic, word and village progression", async () => {
@@ -197,6 +199,8 @@ test("active gameplay keeps the screen awake and releases it at home", async () 
   const { document } = window;
   document.querySelector('[data-action="settings"]').click();
   assert.equal(document.querySelector('[name="keepAwake"]').checked, true);
+  assert.equal(document.querySelectorAll("[data-backup]").length, 2);
+  assert.ok(document.querySelector("[data-privacy-policy]"));
   document.querySelector("[data-close]").click();
   document.querySelector('[data-action="play"]').click();
   await pause();

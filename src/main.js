@@ -23,6 +23,17 @@ import {
   idleGift,
   collectIdleGift
 } from "./village-core.js";
+import { backupFilename, parseBackup, stringifyBackup } from "./backup-core.js";
+import {
+  allowNativeScreenSleep,
+  hideHomeBanner,
+  isNativeApp,
+  keepNativeScreenAwake,
+  openPrivacyPolicy,
+  registerNativeBackHandler,
+  showHomeBanner,
+  showPrivacyChoices
+} from "./native-shell.js";
 
 const STORAGE_KEY = "kus-bahcesi-save-v1";
 const SETTINGS_KEY = "kus-bahcesi-settings-v1";
@@ -64,6 +75,7 @@ let resultCountdownTimer = null;
 let audioContext = null;
 let wakeLockSentinel = null;
 let wakeLockRequestPending = false;
+let nativeWakeLockActive = false;
 
 if (disableOrderGame()) persist();
 
@@ -127,6 +139,7 @@ function applyA11yClasses() {
 function renderHome() {
   game = null;
   void releaseWakeLock();
+  void showHomeBanner();
   const app = document.querySelector("#app");
   const hero = species[(gardenDay(save.level) - 1) % species.length];
   const day = gardenDay(save.level);
@@ -158,6 +171,7 @@ function startGame(daily = false) {
   if (disableOrderGame()) persist();
   if (!daily && canResumeGame()) game = save.currentGame;
   else game = createStage(save.level, daily);
+  void hideHomeBanner();
   void requestWakeLock();
   renderGame();
 }
@@ -524,12 +538,13 @@ function levelSubtitle(level) {
 }
 
 function openVillage() {
+  void hideHomeBanner();
   save.villageSeen = true;
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop";
   backdrop.innerHTML = `<section class="modal village-modal" role="dialog" aria-modal="true" aria-labelledby="village-title"><div class="modal-head"><div><p class="eyebrow">Kalıcı köy gelişimi</p><h2 id="village-title">Kuş Köyü</h2></div><button class="icon-button" data-close aria-label="Köy penceresini kapat">${icon("close")}</button></div><div class="village-modal-resources"><span>🪵 ${save.village.resources.dal}</span><span>🌾 ${save.village.resources.tohum}</span><span>💧 ${save.village.resources.damla}</span></div><p>Bulmacalardan kazandığın kaynaklarla köyü büyüt. Yükseltmeler yeni ödülleri güçlendirir.</p><div class="building-list">${villageBuildings.map(buildingMarkup).join("")}</div></section>`;
   document.body.append(backdrop);
-  const close = () => backdrop.remove();
+  const close = () => { backdrop.remove(); void showHomeBanner(); };
   backdrop.querySelector("[data-close]").addEventListener("click", close);
   backdrop.addEventListener("click", (event) => { if (event.target === backdrop) close(); });
   backdrop.querySelectorAll("[data-building]").forEach((button) => button.addEventListener("click", () => {
@@ -565,9 +580,10 @@ function collectGift() {
 }
 
 function openSettings() {
+  void hideHomeBanner();
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop";
-  backdrop.innerHTML = `<section class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div class="modal-head"><h2 id="settings-title">Rahatına göre</h2><button class="icon-button" data-close aria-label="Ayarları kapat">${icon("close")}</button></div><p>Görünümü ve oyun hissini istediğin gibi ayarla.</p><div class="settings-list">${settingToggle("sound", "Oyun sesleri", "Yumuşak seçim ve başarı sesleri")}${settingToggle("haptics", "Titreşim", "Dokunuşlarda hafif geri bildirim")}${settingToggle("keepAwake", "Ekranı açık tut", "Oynarken telefon ekranının uykuya geçmesini önle")}${settingToggle("largeText", "Büyük yazılar", "Metinleri daha rahat oku")}${settingToggle("highContrast", "Yüksek kontrast", "Kuşları ve yazıları daha belirgin göster")}${settingToggle("reduceMotion", "Hareketleri azalt", "Animasyonları en aza indir")}</div></section>`;
+  backdrop.innerHTML = `<section class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div class="modal-head"><h2 id="settings-title">Rahatına göre</h2><button class="icon-button" data-close aria-label="Ayarları kapat">${icon("close")}</button></div><p>Görünümü ve oyun hissini istediğin gibi ayarla.</p><div class="settings-list">${settingToggle("sound", "Oyun sesleri", "Yumuşak seçim ve başarı sesleri")}${settingToggle("haptics", "Titreşim", "Dokunuşlarda hafif geri bildirim")}${settingToggle("keepAwake", "Ekranı açık tut", "Oynarken telefon ekranının uykuya geçmesini önle")}${settingToggle("largeText", "Büyük yazılar", "Metinleri daha rahat oku")}${settingToggle("highContrast", "Yüksek kontrast", "Kuşları ve yazıları daha belirgin göster")}${settingToggle("reduceMotion", "Hareketleri azalt", "Animasyonları en aza indir")}</div><section class="device-transfer" aria-labelledby="transfer-title"><div><span aria-hidden="true">☁️</span><div><strong id="transfer-title">Kayıt ve telefon değişimi</strong><small>İlerlemeni bir dosyayla güvenle başka telefona taşı.</small></div></div><div class="device-transfer-actions"><button class="secondary-button" data-backup="share">Kaydı paylaş</button><button class="secondary-button" data-backup="import">Kayıt yükle</button>${isNativeApp() ? '<button class="text-button" data-privacy>Reklam gizlilik tercihleri</button>' : ""}<button class="text-button" data-privacy-policy>Gizlilik politikası</button></div><input data-backup-file type="file" accept="application/json,.json" hidden></section></section>`;
   document.body.append(backdrop);
   backdrop.querySelectorAll("input").forEach((input) => input.addEventListener("change", () => {
     settings[input.name] = input.checked;
@@ -575,18 +591,84 @@ function openSettings() {
     applyA11yClasses();
     if (input.name === "keepAwake") void (input.checked ? requestWakeLock() : releaseWakeLock());
   }));
-  const close = () => backdrop.remove();
+  backdrop.querySelector('[data-backup="share"]').addEventListener("click", () => void shareBackupFile());
+  const fileInput = backdrop.querySelector("[data-backup-file]");
+  backdrop.querySelector('[data-backup="import"]').addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    try {
+      const backup = parseBackup(await file.text(), MAX_LEVEL);
+      close();
+      openBackupConfirmation(backup);
+    } catch (error) {
+      showToast(error.message || "Kayıt dosyası okunamadı.");
+      fileInput.value = "";
+    }
+  });
+  backdrop.querySelector("[data-privacy]")?.addEventListener("click", async () => {
+    if (!(await showPrivacyChoices())) showToast("Gizlilik seçenekleri şu anda gösterilemiyor.");
+  });
+  backdrop.querySelector("[data-privacy-policy]").addEventListener("click", () => void openPrivacyPolicy());
+  const close = () => { backdrop.remove(); void showHomeBanner(); };
   backdrop.querySelector("[data-close]").addEventListener("click", close);
   backdrop.addEventListener("click", (event) => { if (event.target === backdrop) close(); });
   backdrop.querySelector("button")?.focus();
 }
 
+async function shareBackupFile() {
+  saveGame();
+  const now = new Date();
+  const file = new File([stringifyBackup(save, settings, now)], backupFilename(now), { type: "application/json" });
+  try {
+    if (navigator.share && navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ title: "Kuş Köyü kaydım", text: "Kuş Köyü ilerleme kaydım", files: [file] });
+      showToast("Kayıt paylaşılmaya hazır.");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.name;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast("Kayıt dosyası indirildi.");
+  } catch (error) {
+    if (error?.name !== "AbortError") showToast("Kayıt dosyası paylaşılamadı.");
+  }
+}
+
+function openBackupConfirmation(backup) {
+  const backdrop = document.createElement("div");
+  const importedDay = gardenDay(backup.save.level);
+  const importedScore = Math.max(0, Number(backup.save.score) || 0);
+  backdrop.className = "modal-backdrop";
+  backdrop.innerHTML = `<section class="modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="backup-title"><div class="confirm-icon" aria-hidden="true">📱</div><h2 id="backup-title">Bu kayda devam edilsin mi?</h2><p>Telefondaki mevcut kayıt yerine seçtiğin ilerleme açılacak.</p><div class="backup-summary"><span>Bahçe günü</span><strong>${importedDay}</strong><span>Yaprak puanı</span><strong>${importedScore}</strong></div><div class="modal-actions"><button class="primary-button" data-confirm-backup>Kaydı yükle</button><button class="secondary-button" data-cancel-backup>Vazgeç</button></div></section>`;
+  document.body.append(backdrop);
+  const close = () => { backdrop.remove(); void showHomeBanner(); };
+  backdrop.querySelector("[data-cancel-backup]").addEventListener("click", close);
+  backdrop.querySelector("[data-confirm-backup]").addEventListener("click", () => {
+    save = { ...structuredClone(defaultSave), ...backup.save };
+    save.village = normalizeVillage(save.village);
+    save.skipped = Array.isArray(save.skipped) ? save.skipped : [];
+    settings = { ...defaultSettings, ...backup.settings };
+    game = null;
+    disableOrderGame();
+    persist();
+    close();
+    renderHome();
+    showToast(`Bahçe Günü ${gardenDay(save.level)} kaydı açıldı.`);
+  });
+  backdrop.querySelector("[data-confirm-backup]").focus();
+}
+
 function openAlbum() {
+  void hideHomeBanner();
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop";
   backdrop.innerHTML = `<section class="modal album-modal" role="dialog" aria-modal="true" aria-labelledby="album-title"><div class="modal-head"><div><p class="eyebrow">Keşif defteri</p><h2 id="album-title">Kuş albümü</h2></div><button class="icon-button" data-close aria-label="Albümü kapat">${icon("close")}</button></div><p>${save.discovered.length} kuşu yakından tanıdın. Yeni türler ilerleyen bahçelerde ortaya çıkacak.</p><div class="album-grid">${species.map((bird) => { const discovered = save.discovered.includes(bird.id); return `<article class="album-bird ${discovered ? "" : "is-locked"}" aria-label="${discovered ? bird.name : "Henüz keşfedilmemiş kuş"}"><div>${birdSvg(bird, true)}</div><strong>${discovered ? bird.name : "Yeni keşif"}</strong></article>`; }).join("")}</div></section>`;
   document.body.append(backdrop);
-  const close = () => backdrop.remove();
+  const close = () => { backdrop.remove(); void showHomeBanner(); };
   backdrop.querySelector("[data-close]").addEventListener("click", close);
   backdrop.addEventListener("click", (event) => { if (event.target === backdrop) close(); });
   backdrop.querySelector("button")?.focus();
@@ -610,9 +692,14 @@ function showToast(message) {
 function haptic(pattern) { if (settings.haptics && navigator.vibrate) navigator.vibrate(pattern); }
 
 async function requestWakeLock() {
-  if (!settings.keepAwake || !game || document.visibilityState !== "visible" || !("wakeLock" in navigator) || wakeLockSentinel || wakeLockRequestPending) return;
+  if (!settings.keepAwake || !game || document.visibilityState !== "visible" || wakeLockSentinel || nativeWakeLockActive || wakeLockRequestPending) return;
   wakeLockRequestPending = true;
   try {
+    if (isNativeApp()) {
+      nativeWakeLockActive = await keepNativeScreenAwake();
+      return;
+    }
+    if (!("wakeLock" in navigator)) return;
     const sentinel = await navigator.wakeLock.request("screen");
     if (!settings.keepAwake || !game || document.visibilityState !== "visible") {
       await sentinel.release();
@@ -630,6 +717,10 @@ async function requestWakeLock() {
 }
 
 async function releaseWakeLock() {
+  if (nativeWakeLockActive) {
+    nativeWakeLockActive = false;
+    await allowNativeScreenSleep();
+  }
   const sentinel = wakeLockSentinel;
   wakeLockSentinel = null;
   if (!sentinel || sentinel.released) return;
@@ -666,6 +757,25 @@ document.addEventListener("visibilitychange", () => {
   else void releaseWakeLock();
 });
 document.addEventListener("pointerdown", () => { if (game) void requestWakeLock(); }, { passive: true });
-window.addEventListener("pagehide", () => { saveGame(); void releaseWakeLock(); });
-if ("serviceWorker" in navigator && import.meta.env.PROD) window.addEventListener("load", () => navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL }).catch(() => {}));
+window.addEventListener("pagehide", () => { saveGame(); void releaseWakeLock(); void hideHomeBanner(); });
+if ("serviceWorker" in navigator && import.meta.env.PROD && !import.meta.env.VITE_NATIVE_BUILD) window.addEventListener("load", () => navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL }).catch(() => {}));
+void registerNativeBackHandler(async () => {
+  const modal = [...document.querySelectorAll(".modal-backdrop")].at(-1);
+  if (modal) {
+    const closeButton = modal.querySelector("[data-close], [data-cancel-backup], [data-result='home']");
+    if (closeButton) closeButton.click();
+    else {
+      clearResultTimers();
+      modal.remove();
+      renderHome();
+    }
+    return true;
+  }
+  if (game) {
+    saveGame();
+    renderHome();
+    return true;
+  }
+  return false;
+});
 renderHome();

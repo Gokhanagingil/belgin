@@ -1,3 +1,5 @@
+import { extraWordPuzzles } from "./extra-word-puzzles.js";
+
 export const MAX_LEVEL = 1200;
 
 export const species = [
@@ -78,7 +80,6 @@ export const wordPuzzles = [
   { word: "KEKİK", clue: "Dağlarda yetişen kokulu ot" },
   { word: "REYHAN", clue: "Mor yapraklı hoş kokulu ot" },
   { word: "TARÇIN", clue: "Tatlılara yakışan kokulu baharat" },
-  { word: "LALE", clue: "Kadeh biçimli zarif bahar çiçeği" },
   { word: "NERGİS", clue: "Sarı göbekli kokulu bahar çiçeği" },
   { word: "ZAMBAK", clue: "Büyük ve gösterişli çiçek" },
   { word: "SÜMBÜL", clue: "Salkım salkım açan kokulu çiçek" },
@@ -95,7 +96,8 @@ export const wordPuzzles = [
   { word: "ANLAM", clue: "Bir sözün bize anlattığı düşünce" },
   { word: "RENK", clue: "Çevremizi farklı gösteren görsel özellik" },
   { word: "EZGİ", clue: "Kulağa hoş gelen düzenli sesler" },
-  { word: "NAĞME", clue: "Bir ezginin kulağa hoş gelen parçası" }
+  { word: "NAĞME", clue: "Bir ezginin kulağa hoş gelen parçası" },
+  ...extraWordPuzzles
 ];
 
 export function dailySeed(date = new Date()) {
@@ -162,8 +164,8 @@ export function missionComplete(game) {
 }
 
 export function wordForLevel(level, daily = false, date = new Date()) {
-  const seed = daily ? dailySeed(date) : level * 13 + 7;
-  return wordPuzzles[Math.abs(seed) % wordPuzzles.length];
+  const index = daily ? dailySeed(date) : Math.floor((level - 1) / 3);
+  return wordPuzzles[Math.abs(index) % wordPuzzles.length];
 }
 
 export function makeWordState(level, daily = false, date = new Date()) {

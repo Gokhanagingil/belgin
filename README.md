@@ -21,7 +21,7 @@ Yanlış hamleler can ya da puan kaybettirmez. Süre sınırı yoktur; oyuncu de
 
 - 12 ayrı bölgeye yayılan 400 Bahçe Günü ve toplam 800 aktif bulmaca
 - 4×4'ten 6×6'ya ilerleyen mantık zorluğu
-- 80 özgün Türkçe sözcük ve ipucu
+- 469 özgün Türkçe sözcük ve ipucu; 400 günlük ana yolculukta tekrar yok
 - Dört kalıcı köy binası, kaynak ekonomisi ve sekiz saate kadar biriken dönüş hediyesi
 - Dönüşümlü aşama görevleri ve üç yıldız ustalık sistemi
 - Tarihe bağlı günlük özel görev
@@ -39,6 +39,19 @@ Yanlış hamleler can ya da puan kaybettirmez. Süre sınırı yoktur; oyuncu de
 - Ses, titreşim, büyük yazı, yüksek kontrast ve hareket azaltma ayarları
 - Semantik kontroller, ekran okuyucu etiketleri ve görünür klavye odağı
 - Ana ekrana ekleme ve çevrimdışı devam desteği
+- Android uygulamasında cihaz yedeklemesi ve dosyayla telefonlar arası kayıt aktarımı
+- Oyun ve ayar pencerelerinde görünmeyen, yalnızca ana ekrana ayrılmış küçük AdMob banner alanı
+
+## Android
+
+Capacitor tabanlı Android projesi `android/` dizinindedir. Pilot APK üretmek için:
+
+```bash
+npm ci
+npm run android:debug
+```
+
+GitHub’daki **Android Package** iş akışı test reklamlı pilot APK üretir. İmzalı Play Store AAB süreci, gerekli AdMob kimlikleri ve upload-key sırları tanımlandığında aynı iş akışındaki `store` kanalıyla çalışır. Ayrıntılar için [`docs/android-release.md`](docs/android-release.md) belgesine bakın.
 
 ## Geliştirme
 

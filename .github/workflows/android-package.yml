@@ -1,0 +1,156 @@
+name: Android Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Package channel
+        required: true
+        type: choice
+        default: pilot
+        options:
+          - pilot
+          - store
+      version_code:
+        description: Increasing Play Store version code
+        required: true
+        default: "1"
+      version_name:
+        description: User-visible version
+        required: true
+        default: "1.0.0"
+  pull_request:
+    paths:
+      - "android/**"
+      - "src/**"
+      - "public/**"
+      - "package.json"
+      - "package-lock.json"
+      - "capacitor.config.json"
+      - ".github/workflows/android-package.yml"
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - "src/**"
+      - "public/**"
+      - "package.json"
+      - "package-lock.json"
+      - "capacitor.config.json"
+      - ".github/workflows/android-package.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERSION_CODE_INPUT: ${{ inputs.version_code || '1' }}
+      VERSION_NAME_INPUT: ${{ inputs.version_name || '1.0.0' }}
+      ADMOB_APP_ID: ${{ vars.ADMOB_APP_ID }}
+      ADMOB_BANNER_ID: ${{ vars.ADMOB_BANNER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+
+      - name: Validate version
+        shell: bash
+        run: |
+          [[ "$VERSION_CODE_INPUT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$VERSION_NAME_INPUT" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+
+      - name: Validate Store credentials
+        if: inputs.channel == 'store'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          test -n "$ADMOB_APP_ID"
+          test -n "$ADMOB_BANNER_ID"
+          test -n "$KEYSTORE_BASE64"
+          test -n "$KEYSTORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          test -n "$KEY_PASSWORD"
+          [[ "$ADMOB_APP_ID" != "ca-app-pub-3940256099942544~3347511713" ]]
+          [[ "$ADMOB_BANNER_ID" != "ca-app-pub-3940256099942544/9214589741" ]]
+
+      - name: Build pilot web bundle
+        if: inputs.channel != 'store'
+        env:
+          VITE_ADMOB_MODE: test
+        run: npm run build:android-web
+
+      - name: Build Store web bundle
+        if: inputs.channel == 'store'
+        env:
+          VITE_ADMOB_MODE: production
+          VITE_ADMOB_BANNER_ID: ${{ vars.ADMOB_BANNER_ID }}
+        run: npm run build:android-web
+
+      - run: npx cap sync android
+
+      - name: Build signed pilot APK
+        if: inputs.channel != 'store'
+        working-directory: android
+        run: ./gradlew lintDebug assembleDebug -PADMOB_APP_ID=ca-app-pub-3940256099942544~3347511713 -PVERSION_CODE="$VERSION_CODE_INPUT" -PVERSION_NAME="$VERSION_NAME_INPUT"
+
+      - name: Prepare Store upload key
+        if: inputs.channel == 'store'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        shell: bash
+        run: |
+          key_path="$RUNNER_TEMP/kus-koyu-upload.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$key_path"
+          echo "ANDROID_KEYSTORE_PATH=$key_path" >> "$GITHUB_ENV"
+
+      - name: Build signed Store AAB
+        if: inputs.channel == 'store'
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew lintRelease bundleRelease -PADMOB_APP_ID="$ADMOB_APP_ID" -PVERSION_CODE="$VERSION_CODE_INPUT" -PVERSION_NAME="$VERSION_NAME_INPUT"
+
+      - name: Upload pilot APK
+        if: inputs.channel != 'store'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kus-koyu-pilot-${{ env.VERSION_NAME_INPUT }}
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Store AAB
+        if: inputs.channel == 'store'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kus-koyu-store-${{ env.VERSION_NAME_INPUT }}
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30

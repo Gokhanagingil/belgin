@@ -521,6 +521,34 @@ button:focus-visible, input:focus-visible {
 .setting-row label { font-weight: 700; }
 .setting-row small { display: block; margin-top: 3px; color: var(--muted); }
 
+.settings-modal { max-height: min(92dvh, 820px); overflow-y: auto; }
+.device-transfer {
+  display: grid;
+  gap: 13px;
+  margin-top: 20px;
+  padding: 15px;
+  border: 1px solid rgba(50, 102, 69, .14);
+  border-radius: 20px;
+  background: #f2f6eb;
+}
+.device-transfer > div:first-child { display: flex; align-items: center; gap: 11px; }
+.device-transfer > div:first-child > span { display: grid; place-items: center; width: 44px; height: 44px; flex: 0 0 auto; border-radius: 14px; background: white; font-size: 1.4rem; }
+.device-transfer strong,
+.device-transfer small { display: block; }
+.device-transfer small { margin-top: 3px; color: var(--muted); line-height: 1.35; }
+.device-transfer-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; }
+.device-transfer-actions .secondary-button { min-height: 46px; padding: 0 12px; border-radius: 14px; font-size: .8rem; }
+.text-button { grid-column: 1 / -1; min-height: 42px; border: 0; color: var(--forest); background: transparent; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.confirm-modal { text-align: center; }
+.confirm-icon { display: grid; place-items: center; width: 72px; height: 72px; margin: -4px auto 14px; border-radius: 24px; background: #eef5e8; font-size: 2.4rem; }
+.backup-summary { display: grid; grid-template-columns: 1fr auto; gap: 9px 18px; margin-top: 18px; padding: 14px 16px; border-radius: 17px; background: #f3f5eb; text-align: left; }
+.backup-summary span { color: var(--muted); }
+.backup-summary strong { color: var(--forest-strong); }
+
+body.native-banner-visible .home-screen {
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+
 .switch {
   position: relative;
   width: 54px;
@@ -624,6 +652,7 @@ button:focus-visible, input:focus-visible {
 }
 
 @media (orientation: landscape) and (max-height: 560px) {
+  body.native-banner-visible .home-screen { padding-bottom: calc(62px + env(safe-area-inset-bottom)); }
   .game-screen {
     width: min(100%, 1050px);
     grid-template-columns: minmax(0, 1fr) minmax(290px, .52fr);
