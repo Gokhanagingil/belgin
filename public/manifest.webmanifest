@@ -1,0 +1,19 @@
+{
+  "name": "Kuş Bahçesi",
+  "short_name": "Kuş Bahçesi",
+  "description": "Kuşları eşleştir, bahçeni büyüt.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ecf7ec",
+  "theme_color": "#2f6f4f",
+  "lang": "tr",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
