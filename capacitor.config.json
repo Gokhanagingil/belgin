@@ -1,0 +1,12 @@
+{
+  "appId": "com.gokhanagingil.kuskoyu",
+  "appName": "Kuş Köyü",
+  "webDir": "dist",
+  "backgroundColor": "#eaf5eb",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#eaf5eb"
+  }
+}

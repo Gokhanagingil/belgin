@@ -12,6 +12,7 @@ import {
   puzzleSize,
   species,
   stageForLevel,
+  wordPuzzles,
   MAX_LEVEL
 } from "../src/game-core.js";
 import {
@@ -77,11 +78,16 @@ test("workshop orders vary from day one without back-to-back repeats", () => {
 });
 
 test("all 400 word stages contain the exact shuffled answer letters", () => {
+  const campaignWords = new Set();
   for (let level = 3; level <= MAX_LEVEL; level += 3) {
     const game = makeWordStage(level);
     const letters = game.wordState.letters.map((item) => item.letter).sort().join("");
     assert.equal(letters, [...game.wordState.word].sort().join(""));
+    campaignWords.add(game.wordState.word);
   }
+  assert.ok(wordPuzzles.length >= 400);
+  assert.equal(new Set(wordPuzzles.map((puzzle) => puzzle.word)).size, wordPuzzles.length);
+  assert.equal(campaignWords.size, 400, "the one-year campaign must not repeat a word");
 });
 
 test("difficulty grows over garden days instead of jumping after a few stages", () => {

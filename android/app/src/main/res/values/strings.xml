@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Kuş Köyü</string>
+    <string name="title_activity_main">Kuş Köyü</string>
+    <string name="package_name">com.gokhanagingil.kuskoyu</string>
+    <string name="custom_url_scheme">com.gokhanagingil.kuskoyu</string>
+</resources>
