@@ -102,9 +102,19 @@ export function dailySeed(date = new Date()) {
   return Number(date.toISOString().slice(0, 10).replaceAll("-", ""));
 }
 
+export function gardenDay(level) {
+  return Math.ceil(level / 3);
+}
+
+export function stageForLevel(level, daily = false, date = new Date()) {
+  if (daily) return ["logic", "order", "word"][dailySeed(date) % 3];
+  return ["logic", "order", "word"][(level - 1) % 3];
+}
+
 export function puzzleSize(level) {
-  if (level <= 12) return 4;
-  if (level <= 80) return 5;
+  const day = gardenDay(level);
+  if (day <= 20) return 4;
+  if (day <= 100) return 5;
   return 6;
 }
 
@@ -165,14 +175,28 @@ export function makeWordState(level, daily = false, date = new Date()) {
   return { ...puzzle, letters, answer: [], attempts: 0, hintUsed: false };
 }
 
-export function makeLevel(level, daily = false, date = new Date()) {
-  if (!Number.isInteger(level) || level < 1 || level > MAX_LEVEL) {
-    throw new RangeError(`Bölüm 1 ile ${MAX_LEVEL} arasında olmalıdır.`);
-  }
+export function makeWordStage(level, daily = false, date = new Date()) {
+  validateLevel(level);
+  return {
+    version: 4,
+    mode: "word",
+    level,
+    day: gardenDay(level),
+    daily,
+    status: "playing",
+    wordState: makeWordState(level, daily, date),
+    helpsUsed: 0,
+    busy: false
+  };
+}
+
+export function makeLogicStage(level, daily = false, date = new Date()) {
+  validateLevel(level);
+  const day = gardenDay(level);
   const seed = daily ? dailySeed(date) : level * 9973 + 41;
   const rng = seededRandom(seed);
   const size = puzzleSize(level);
-  const offset = Math.floor((level - 1) / 8) % species.length;
+  const offset = Math.floor((day - 1) / 8) % species.length;
   const available = Array.from({ length: size }, (_, index) => species[(offset + index) % species.length]);
   const symbolOrder = shuffledRange(size, rng);
   const rowOrder = shuffledRange(size, rng);
@@ -184,7 +208,7 @@ export function makeLevel(level, daily = false, date = new Date()) {
   });
 
   const baseGivens = size === 4 ? 7 : size === 5 ? 10 : 15;
-  const challengeStep = size === 4 ? Math.floor((level - 1) / 4) : Math.floor((level - 1) / 12);
+  const challengeStep = size === 4 ? Math.floor((day - 1) / 5) : Math.floor((day - 1) / 18);
   const givenCount = Math.max(size, baseGivens - (challengeStep % 4));
   const givenIndices = chooseGivens(size, givenCount, rng);
   const cells = solution.map((solutionId, index) => ({
@@ -197,8 +221,10 @@ export function makeLevel(level, daily = false, date = new Date()) {
   }));
 
   return {
-    version: 3,
+    version: 4,
+    mode: "logic",
     level,
+    day,
     daily,
     size,
     speciesIds: available.map((bird) => bird.id),
@@ -211,11 +237,20 @@ export function makeLevel(level, daily = false, date = new Date()) {
     undoCount: 0,
     conflictMoves: 0,
     status: "playing",
-    phase: "logic",
-    wordState: null,
     mission: missionForLevel(level),
     busy: false
   };
+}
+
+// Eski entegrasyonlar için mantık bulmacası üreticisinin uyumlu adı.
+export function makeLevel(level, daily = false, date = new Date()) {
+  return makeLogicStage(level, daily, date);
+}
+
+function validateLevel(level) {
+  if (!Number.isInteger(level) || level < 1 || level > MAX_LEVEL) {
+    throw new RangeError(`Bölüm 1 ile ${MAX_LEVEL} arasında olmalıdır.`);
+  }
 }
 
 function chooseGivens(size, count, rng) {
