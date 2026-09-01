@@ -1,13 +1,13 @@
 {
   "name": "kus-bahcesi",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "check": "node --check src/main.js && node --check src/game-core.js",
+    "check": "node --check src/main.js && node --check src/game-core.js && node --check src/order-core.js && node --check src/village-core.js",
     "test": "npm run build --silent && node --test"
   },
   "devDependencies": {
