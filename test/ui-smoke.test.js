@@ -15,6 +15,13 @@ async function bootApp() {
   return window;
 }
 
+test("production output targets the GitHub Pages project path", async () => {
+  const html = await readFile(new URL("../dist/index.html", import.meta.url), "utf8");
+  assert.match(html, /\/belgin\/assets\//);
+  assert.match(html, /\/belgin\/manifest\.webmanifest/);
+  assert.match(html, /\/belgin\/icon\.svg/);
+});
+
 test("home, game, match and album flows stay operational", async () => {
   const window = await bootApp();
   const { document } = window;
