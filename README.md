@@ -35,6 +35,7 @@ Yanlış hamleler can ya da puan kaybettirmez. Süre sınırı yoktur; oyuncu de
 - Çakışmaları açıklayan anlık, cezalandırmayan geri bildirim
 - Geri alma, çakışmaları temizleme ve doğru yer ipucu
 - Her başarıdan sonra kısa kutlamayla otomatik sonraki aşamaya geçiş
+- Aktif oyun sırasında varsayılan açık ekran koruması; ana ekranda otomatik bırakma
 - Ses, titreşim, büyük yazı, yüksek kontrast ve hareket azaltma ayarları
 - Semantik kontroller, ekran okuyucu etiketleri ve görünür klavye odağı
 - Ana ekrana ekleme ve çevrimdışı devam desteği
