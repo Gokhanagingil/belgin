@@ -12,19 +12,6 @@ import {
   stageForLevel
 } from "./game-core.js";
 import {
-  makeOrderStage,
-  workshopItems,
-  workshopRecipes,
-  canCraft,
-  craftOne,
-  undoCraft,
-  resetOrder,
-  isOrderComplete,
-  orderProgress,
-  orderHint,
-  orderMissionComplete
-} from "./order-core.js";
-import {
   defaultVillage,
   villageBuildings,
   normalizeVillage,
@@ -51,7 +38,7 @@ const defaultSave = {
   wordOnboardingSeen: false,
   orderOnboardingSeen: false,
   villageSeen: false,
-  skipOrders: false,
+  skipOrders: true,
   dailyCompleted: [],
   village: defaultVillage,
   currentGame: null
@@ -60,6 +47,7 @@ const defaultSave = {
 const defaultSettings = {
   sound: true,
   haptics: true,
+  keepAwake: true,
   largeText: false,
   highContrast: false,
   reduceMotion: false
@@ -74,8 +62,10 @@ let toastTimer = null;
 let resultTimer = null;
 let resultCountdownTimer = null;
 let audioContext = null;
+let wakeLockSentinel = null;
+let wakeLockRequestPending = false;
 
-if (skipOptionalOrder()) persist();
+if (disableOrderGame()) persist();
 
 function loadJson(key, fallback) {
   try {
@@ -136,15 +126,15 @@ function applyA11yClasses() {
 
 function renderHome() {
   game = null;
+  void releaseWakeLock();
   const app = document.querySelector("#app");
   const hero = species[(gardenDay(save.level) - 1) % species.length];
   const day = gardenDay(save.level);
   const mode = stageForLevel(save.level);
   const meta = stageMeta(mode);
-  const dayStep = (save.level - 1) % 3;
+  const dayStep = mode === "word" ? 1 : 0;
   const gift = idleGift(save.village);
   const journeyCount = save.completed.length + save.skipped.length;
-  const orderSkipped = save.skipOrders || save.skipped.includes(day * 3 - 1);
   app.innerHTML = `<main class="app-shell"><section class="screen home-screen" aria-labelledby="home-title">
     <header class="home-topbar"><div class="brand-mark"><div class="brand-badge">${birdSvg(species[0], true)}</div><div><p class="eyebrow">Yaşayan bulmaca köyü</p><h1 class="brand-title" id="home-title">Kuş Köyü</h1></div></div><button class="icon-button" data-action="settings" aria-label="Ayarları aç">${icon("settings")}</button></header>
     <div class="resource-bar" aria-label="Köy kaynakları"><span title="Sağlam dal">🪵 <strong>${save.village.resources.dal}</strong></span><span title="Altın tohum">🌾 <strong>${save.village.resources.tohum}</strong></span><span title="Berrak damla">💧 <strong>${save.village.resources.damla}</strong></span><button data-action="village">Köyü geliştir</button></div>
@@ -157,8 +147,7 @@ function renderHome() {
       <div class="village-copy"><div class="hero-kicker">✦ BAHÇE GÜNÜ ${day}</div><h2>${meta.greeting}<br><span>${meta.title}</span></h2><p>${meta.copy}</p><button class="primary-button" data-action="play">${canResumeGame() ? "Kaldığın yerden devam et" : `${meta.icon} ${meta.button}`}</button></div>
     </article>
     ${gift ? `<button class="idle-gift" data-action="collect-gift"><span>🎁</span><div><strong>Kuşlar seni beklerken çalıştı</strong><small>${gift.hours} saatlik köy hediyesini topla</small></div><b>Topla</b></button>` : ""}
-    <section class="day-route" aria-label="Bahçe Günü ${day} aşamaları"><div class="day-route-head"><div><span>Bugünün yolu</span><strong>${levelSubtitle(save.level)}</strong></div><em>${day}/400 gün</em></div><div class="route-steps">${["logic", "order", "word"].map((id, index) => { const item = stageMeta(id); const isSkipped = id === "order" && orderSkipped; return `<div class="route-step ${isSkipped ? "is-skipped" : index < dayStep ? "is-done" : index === dayStep ? "is-current" : ""}"><span>${isSkipped ? "—" : index < dayStep ? "✓" : item.icon}</span><small>${isSkipped ? "Öğle · isteğe bağlı" : item.short}</small></div>`; }).join("")}</div><div class="progress-track"><div class="progress-fill" style="width:${Math.max(1, (journeyCount / MAX_LEVEL) * 100)}%"></div></div></section>
-    <section class="route-choice" aria-labelledby="route-choice-title"><div><span>OYUN YOLU</span><strong id="route-choice-title">${save.skipOrders ? "Mantık + Sözcük" : "Üçlü Bahçe Günü"}</strong><p>${save.skipOrders ? "Siparişlere uğramadan iki sevdiğin oyunla ilerle." : "Kuş Düzeni, Atölye ve Gizli Sözcük birlikte ilerler."}</p></div><div class="route-choice-buttons" role="group" aria-label="Oyun yolu seçimi"><button data-route="classic" aria-pressed="${save.skipOrders}" class="${save.skipOrders ? "is-active" : ""}">🧩 + 🔤 İki oyun</button><button data-route="full" aria-pressed="${!save.skipOrders}" class="${save.skipOrders ? "" : "is-active"}">🧺 dahil Üç oyun</button></div></section>
+    <section class="day-route" aria-label="Bahçe Günü ${day} bulmacaları"><div class="day-route-head"><div><span>Bugünün iki bulmacası</span><strong>${levelSubtitle(save.level)}</strong></div><em>${day}/400 gün</em></div><div class="route-steps">${["logic", "word"].map((id, index) => { const item = stageMeta(id); return `<div class="route-step ${index < dayStep ? "is-done" : index === dayStep ? "is-current" : ""}"><span>${index < dayStep ? "✓" : item.icon}</span><small>${item.short}</small></div>`; }).join("")}</div><div class="progress-track"><div class="progress-fill" style="width:${Math.max(1, (journeyCount / MAX_LEVEL) * 100)}%"></div></div></section>
     <div class="quick-grid"><button class="quick-card" data-action="daily"><span class="mini-icon">☀️</span><strong>Günün görevi</strong><span>Her gün değişen özel bir köy bulmacası</span></button><button class="quick-card" data-action="album"><span class="mini-icon">🪶</span><strong>Kuş albümü</strong><span>${save.discovered.length} kuş keşfedildi</span></button></div>
   </section></main>`;
   bindCommonActions();
@@ -166,8 +155,10 @@ function renderHome() {
 }
 
 function startGame(daily = false) {
+  if (disableOrderGame()) persist();
   if (!daily && canResumeGame()) game = save.currentGame;
   else game = createStage(save.level, daily);
+  void requestWakeLock();
   renderGame();
 }
 
@@ -176,31 +167,34 @@ function canResumeGame() {
   return saved?.version === 4
     && saved.status === "playing"
     && saved.level === save.level
-    && (saved.mode !== "order" || saved.orderVersion === 2);
+    && saved.mode !== "order";
 }
 
-function skipOptionalOrder() {
-  if (!save.skipOrders || stageForLevel(save.level) !== "order") return false;
-  if (!save.skipped.includes(save.level)) save.skipped.push(save.level);
+function disableOrderGame() {
+  let changed = false;
+  if (!save.skipOrders) {
+    save.skipOrders = true;
+    changed = true;
+  }
+  if (save.currentGame?.mode === "order") {
+    save.currentGame = null;
+    changed = true;
+  }
+  if (stageForLevel(save.level) !== "order") return changed;
+  if (!save.completed.includes(save.level) && !save.skipped.includes(save.level)) save.skipped.push(save.level);
   save.level = Math.min(MAX_LEVEL, save.level + 1);
   save.currentGame = null;
   return true;
 }
 
-function setRoutePreference(route) {
-  const skipOrders = route === "classic";
-  if (save.skipOrders === skipOrders) return;
-  save.skipOrders = skipOrders;
-  skipOptionalOrder();
-  persist();
-  renderHome();
-  showToast(skipOrders ? "Mantık + Sözcük yolu seçildi." : "Atölye yeniden Bahçe Gününe eklendi.");
-}
-
 function createStage(level, daily = false) {
   let mode = stageForLevel(level, daily);
-  if (daily && save.skipOrders && mode === "order") mode = new Date().getUTCDate() % 2 ? "logic" : "word";
-  const stage = mode === "logic" ? makeLogicStage(level, daily) : mode === "order" ? makeOrderStage(level, daily) : makeWordStage(level, daily);
+  let stageLevel = level;
+  if (mode === "order") {
+    mode = daily && new Date().getUTCDate() % 2 ? "logic" : "word";
+    if (!daily) stageLevel = Math.min(MAX_LEVEL, level + 1);
+  }
+  const stage = mode === "logic" ? makeLogicStage(stageLevel, daily) : makeWordStage(stageLevel, daily);
   stage.dateKey = new Date().toISOString().slice(0, 10);
   return stage;
 }
@@ -208,7 +202,6 @@ function createStage(level, daily = false) {
 function stageMeta(mode) {
   return {
     logic: { icon: "🧩", short: "Sabah", greeting: "Günaydın!", title: "Kuş Düzeni", button: "Kuşları yerleştir", copy: "Her satır ve sütunda kuşları dengeli biçimde yerleştir." },
-    order: { icon: "🧺", short: "Öğle", greeting: "Atölye açıldı", title: "Siparişler hazır", button: "Atölyeye gir", copy: "Ara ürünleri doğru sırada hazırla, köyün siparişlerini tamamla." },
     word: { icon: "🔤", short: "Akşam", greeting: "Bahçe fısıldıyor", title: "Gizli Sözcük", button: "Sözcüğü bul", copy: "İpucunu çöz, karışık harfleri anlamlı bir sözcüğe dönüştür." }
   }[mode];
 }
@@ -220,7 +213,6 @@ function saveGame() {
 
 function renderGame() {
   if (game.mode === "word") return renderWordGame();
-  if (game.mode === "order") return renderOrderGame();
   const app = document.querySelector("#app");
   const conflicts = getConflicts(game.cells, game.size);
   const openCount = game.cells.filter((cell) => !cell.given).length;
@@ -266,7 +258,6 @@ function bindCommonActions() {
   document.querySelector('[data-action="album"]')?.addEventListener("click", openAlbum);
   document.querySelectorAll('[data-action="village"]').forEach((button) => button.addEventListener("click", openVillage));
   document.querySelector('[data-action="collect-gift"]')?.addEventListener("click", collectGift);
-  document.querySelectorAll("[data-route]").forEach((button) => button.addEventListener("click", () => setRoutePreference(button.dataset.route)));
 }
 
 function bindGameActions() {
@@ -373,80 +364,6 @@ function showHint() {
   if (isGridSolved(game)) setTimeout(finishStage, settings.reduceMotion ? 20 : 700);
 }
 
-function renderOrderGame() {
-  const app = document.querySelector("#app");
-  const progress = orderProgress(game);
-  const percent = Math.round((progress.delivered / progress.total) * 100);
-  const inventoryItems = Object.entries(game.inventory).filter(([, count]) => count > 0);
-  const recipes = workshopRecipes.filter((recipe) => game.availableRecipeIds.includes(recipe.id));
-  app.innerHTML = `<main class="app-shell"><section class="screen game-screen order-screen" aria-labelledby="level-title">
-    ${gameHeader("Öğle · Atölye siparişleri")}
-    <div class="progress-wrap" aria-label="Sipariş ilerlemesi yüzde ${percent}"><div class="progress-track"><div class="progress-fill" style="width:${percent}%"></div></div><div class="progress-label">${progress.delivered}/${progress.total}</div></div>
-    <aside class="mission-card ${orderMissionComplete(game) ? "is-safe" : ""}"><span class="mission-medal">✦</span><div><strong>${game.mission.title}</strong><span>${game.mission.copy}</span></div></aside>
-    <aside class="order-story"><span>${game.story.icon}</span><div><small>BUGÜNÜN HİKÂYESİ</small><strong>${game.story.title}</strong><p>${game.story.copy}</p></div></aside>
-    <section class="orders-panel" aria-labelledby="orders-title"><div class="section-title"><div><span>Köy meydanı</span><h2 id="orders-title">Bugünün misafirleri</h2></div><em>${game.orders.filter((order) => order.delivered >= order.required).length}/${game.orders.length}</em></div><div class="order-cards">${game.orders.map((order) => { const item = workshopItems[order.productId]; const customer = birdById(order.customerId); const done = order.delivered >= order.required; return `<article class="order-card ${done ? "is-done" : ""}"><span class="customer-avatar">${done ? "<b>✓</b>" : birdSvg(customer, true)}</span><div class="order-card-copy"><small>${order.customerName} · ${order.note}</small><strong>${item.icon} ${item.name}</strong><em>${order.delivered}/${order.required} hazır</em></div></article>`; }).join("")}</div></section>
-    <section class="workshop-panel" aria-labelledby="workshop-title"><div class="section-title"><div><span>Malzeme rafı</span><h2 id="workshop-title">Atölyede üret</h2></div></div><div class="ingredient-shelf">${inventoryItems.map(([id, count]) => { const item = workshopItems[id]; return `<div class="ingredient-chip" aria-label="${item.name}, ${count} adet"><span>${item.icon}</span><small>${item.name}</small><strong>${count}</strong></div>`; }).join("")}</div><div class="recipe-grid">${recipes.map(recipeMarkup).join("")}</div></section>
-    ${!save.orderOnboardingSeen ? '<div class="order-coach" role="status"><strong>Siparişler birkaç üretim adımı isteyebilir.</strong><br>Örneğin sepetten önce iplik hazırla. Malzemeleri ortak kullandığın için sıranı planla.</div>' : ""}
-    <div class="power-row"><button class="power-button" data-action="order-undo" ${game.history.length ? "" : "disabled"}>${icon("undo")}<span>Geri al</span></button><button class="power-button" data-action="order-reset">${icon("clear")}<span>Baştan başla</span></button><button class="power-button" data-action="order-hint">${icon("hint")}<span>Sıradaki adım</span></button></div>
-  </section></main>`;
-  document.querySelectorAll("[data-recipe]").forEach((button) => button.addEventListener("click", () => craftRecipe(button.dataset.recipe)));
-  document.querySelector('[data-action="order-undo"]')?.addEventListener("click", undoOrderMove);
-  document.querySelector('[data-action="order-reset"]')?.addEventListener("click", resetOrderGame);
-  document.querySelector('[data-action="order-hint"]')?.addEventListener("click", showOrderHint);
-  document.querySelector('[data-action="home"]')?.addEventListener("click", () => { saveGame(); renderHome(); });
-  applyA11yClasses();
-}
-
-function recipeMarkup(recipe) {
-  const output = workshopItems[recipe.output];
-  const inputCounts = recipe.inputs.reduce((counts, id) => ({ ...counts, [id]: (counts[id] || 0) + 1 }), {});
-  const inputs = Object.entries(inputCounts).map(([id, count]) => `<span>${workshopItems[id].icon}${count > 1 ? `×${count}` : ""}</span>`).join('<b aria-hidden="true">+</b>');
-  return `<button class="recipe-card" data-recipe="${recipe.id}" ${canCraft(game, recipe.id) ? "" : "disabled"} aria-label="${output.name} üret, ${recipe.station}"><div class="recipe-output">${output.icon}</div><div><strong>${output.name}</strong><small>${recipe.station}</small><div class="recipe-inputs">${inputs}<b aria-hidden="true">→</b><span>${output.icon}</span></div></div></button>`;
-}
-
-async function craftRecipe(recipeId) {
-  if (game.busy || !craftOne(game, recipeId)) return;
-  save.orderOnboardingSeen = true;
-  playTone(440 + Math.min(game.moves, 5) * 35, .08);
-  haptic(16);
-  renderOrderGame();
-  document.querySelector(`[data-recipe="${recipeId}"]`)?.classList.add("is-crafted");
-  saveGame();
-  if (isOrderComplete(game)) {
-    game.busy = true;
-    playSuccessSound();
-    await wait(settings.reduceMotion ? 1 : 700);
-    finishStage();
-  }
-}
-
-function undoOrderMove() {
-  if (!undoCraft(game) || game.busy) return;
-  playTone(280, .05);
-  renderOrderGame();
-  saveGame();
-}
-
-function resetOrderGame() {
-  if (game.busy) return;
-  resetOrder(game);
-  renderOrderGame();
-  showToast("Atölye ilk haline döndü.");
-  saveGame();
-}
-
-function showOrderHint() {
-  if (game.busy) return;
-  const recipeId = orderHint(game);
-  if (!recipeId) return showToast("Önce bir hamleyi geri almayı dene.");
-  const recipe = workshopRecipes.find((item) => item.id === recipeId);
-  game.helpsUsed += 1;
-  renderOrderGame();
-  document.querySelector(`[data-recipe="${recipeId}"]`)?.classList.add("is-hint");
-  showToast(`Sıradaki iyi adım: ${workshopItems[recipe.output].name}`);
-  saveGame();
-}
-
 function renderWordGame() {
   const app = document.querySelector("#app");
   const word = game.wordState;
@@ -528,8 +445,8 @@ function wordHint() {
 function finishStage() {
   game.status = "won";
   game.busy = false;
-  const careful = game.mode === "logic" ? missionComplete(game) : game.mode === "order" ? orderMissionComplete(game) : game.wordState.attempts <= 1;
-  const mastery = game.helpsUsed === 0 && (game.mode !== "order" || (game.resetCount === 0 && game.moves <= game.optimalMoves));
+  const careful = game.mode === "logic" ? missionComplete(game) : game.wordState.attempts <= 1;
+  const mastery = game.helpsUsed === 0;
   game.earnedStars = 1 + (careful ? 1 : 0) + (mastery ? 1 : 0);
   game.completedDay = !game.daily && game.level % 3 === 0;
   const rewardAllowed = !game.daily || !save.dailyCompleted.includes(game.dateKey);
@@ -546,7 +463,7 @@ function finishStage() {
     if (game.mode === "logic") for (const id of game.speciesIds) if (!save.discovered.includes(id)) save.discovered.push(id);
     save.level = Math.min(MAX_LEVEL, save.level + 1);
     save.currentGame = null;
-    skipOptionalOrder();
+    disableOrderGame();
   }
   persist();
   openResult();
@@ -558,9 +475,7 @@ function openResult() {
   const bird = species[(game.level + 1) % species.length];
   const result = game.mode === "logic"
     ? { kicker: "Kuş düzeni tamamlandı", title: "Bahçe dengelendi!", copy: "Her kuş doğru yerini buldu. Köyün yeni yapıları için sağlam dallar kazandın." }
-    : game.mode === "order"
-      ? { kicker: "Tüm siparişler hazır", title: "Atölye şenlendi!", copy: "Ara ürünleri doğru sırada hazırladın; kuşlar siparişlerini mutlulukla teslim aldı." }
-      : { kicker: `${game.wordState.word} bulundu`, title: "Bahçe konuştu!", copy: "Gizli sözcüğü çözdün ve Çınar Kütüphanesi için berrak damlalar kazandın." };
+    : { kicker: `${game.wordState.word} bulundu`, title: "Bahçe konuştu!", copy: "Gizli sözcüğü çözdün ve Çınar Kütüphanesi için berrak damlalar kazandın." };
   const nextMeta = !game.daily && game.level < MAX_LEVEL ? stageMeta(stageForLevel(save.level)) : null;
   const rewardLine = Object.entries(game.reward).filter(([, amount]) => amount > 0).map(([id, amount]) => `${{ dal: "🪵", tohum: "🌾", damla: "💧" }[id]} +${amount}`).join("  ");
   const returnsHome = game.daily || game.level === MAX_LEVEL || game.completedDay;
@@ -652,9 +567,14 @@ function collectGift() {
 function openSettings() {
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop";
-  backdrop.innerHTML = `<section class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div class="modal-head"><h2 id="settings-title">Rahatına göre</h2><button class="icon-button" data-close aria-label="Ayarları kapat">${icon("close")}</button></div><p>Görünümü ve oyun hissini istediğin gibi ayarla.</p><div class="settings-list">${settingToggle("sound", "Oyun sesleri", "Yumuşak seçim ve başarı sesleri")}${settingToggle("haptics", "Titreşim", "Dokunuşlarda hafif geri bildirim")}${settingToggle("largeText", "Büyük yazılar", "Metinleri daha rahat oku")}${settingToggle("highContrast", "Yüksek kontrast", "Kuşları ve yazıları daha belirgin göster")}${settingToggle("reduceMotion", "Hareketleri azalt", "Animasyonları en aza indir")}</div></section>`;
+  backdrop.innerHTML = `<section class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div class="modal-head"><h2 id="settings-title">Rahatına göre</h2><button class="icon-button" data-close aria-label="Ayarları kapat">${icon("close")}</button></div><p>Görünümü ve oyun hissini istediğin gibi ayarla.</p><div class="settings-list">${settingToggle("sound", "Oyun sesleri", "Yumuşak seçim ve başarı sesleri")}${settingToggle("haptics", "Titreşim", "Dokunuşlarda hafif geri bildirim")}${settingToggle("keepAwake", "Ekranı açık tut", "Oynarken telefon ekranının uykuya geçmesini önle")}${settingToggle("largeText", "Büyük yazılar", "Metinleri daha rahat oku")}${settingToggle("highContrast", "Yüksek kontrast", "Kuşları ve yazıları daha belirgin göster")}${settingToggle("reduceMotion", "Hareketleri azalt", "Animasyonları en aza indir")}</div></section>`;
   document.body.append(backdrop);
-  backdrop.querySelectorAll("input").forEach((input) => input.addEventListener("change", () => { settings[input.name] = input.checked; persist(); applyA11yClasses(); }));
+  backdrop.querySelectorAll("input").forEach((input) => input.addEventListener("change", () => {
+    settings[input.name] = input.checked;
+    persist();
+    applyA11yClasses();
+    if (input.name === "keepAwake") void (input.checked ? requestWakeLock() : releaseWakeLock());
+  }));
   const close = () => backdrop.remove();
   backdrop.querySelector("[data-close]").addEventListener("click", close);
   backdrop.addEventListener("click", (event) => { if (event.target === backdrop) close(); });
@@ -689,6 +609,33 @@ function showToast(message) {
 
 function haptic(pattern) { if (settings.haptics && navigator.vibrate) navigator.vibrate(pattern); }
 
+async function requestWakeLock() {
+  if (!settings.keepAwake || !game || document.visibilityState !== "visible" || !("wakeLock" in navigator) || wakeLockSentinel || wakeLockRequestPending) return;
+  wakeLockRequestPending = true;
+  try {
+    const sentinel = await navigator.wakeLock.request("screen");
+    if (!settings.keepAwake || !game || document.visibilityState !== "visible") {
+      await sentinel.release();
+      return;
+    }
+    wakeLockSentinel = sentinel;
+    sentinel.addEventListener("release", () => {
+      if (wakeLockSentinel === sentinel) wakeLockSentinel = null;
+    });
+  } catch {
+    wakeLockSentinel = null;
+  } finally {
+    wakeLockRequestPending = false;
+  }
+}
+
+async function releaseWakeLock() {
+  const sentinel = wakeLockSentinel;
+  wakeLockSentinel = null;
+  if (!sentinel || sentinel.released) return;
+  try { await sentinel.release(); } catch { /* Sistem kilidi daha önce bıraktıysa devam et. */ }
+}
+
 function playTone(frequency, duration) {
   if (!settings.sound) return;
   try {
@@ -714,6 +661,11 @@ function playSuccessSound() {
 
 function wait(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
-window.addEventListener("pagehide", saveGame);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && game) void requestWakeLock();
+  else void releaseWakeLock();
+});
+document.addEventListener("pointerdown", () => { if (game) void requestWakeLock(); }, { passive: true });
+window.addEventListener("pagehide", () => { saveGame(); void releaseWakeLock(); });
 if ("serviceWorker" in navigator && import.meta.env.PROD) window.addEventListener("load", () => navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL }).catch(() => {}));
 renderHome();

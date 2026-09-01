@@ -1079,34 +1079,14 @@ button:focus-visible, input:focus-visible {
 .day-route-head span { color: var(--muted); font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
 .day-route-head strong { margin-top: 2px; color: var(--forest-strong); }
 .day-route-head em { color: var(--muted); font-size: .78rem; font-style: normal; font-weight: 800; }
-.route-steps { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
-.route-steps::before { content: ""; position: absolute; left: 16%; right: 16%; top: 20px; height: 3px; background: #d8e2d2; }
+.route-steps { position: relative; display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
+.route-steps::before { content: ""; position: absolute; left: 25%; right: 25%; top: 20px; height: 3px; background: #d8e2d2; }
 .route-step { position: relative; z-index: 1; display: grid; place-items: center; gap: 4px; color: var(--muted); }
 .route-step > span { display: grid; place-items: center; width: 42px; height: 42px; border: 3px solid #e0e8dc; border-radius: 50%; background: #f7f8f1; font-size: 1.05rem; }
 .route-step small { font-weight: 800; }
 .route-step.is-current > span { border-color: #e6a251; background: #fff0c9; box-shadow: 0 0 0 4px rgba(230,162,81,.16); }
 .route-step.is-current small { color: #9b6427; }
 .route-step.is-done > span { border-color: var(--forest); color: white; background: var(--forest); }
-.route-step.is-skipped > span { border-style: dashed; border-color: #aebbad; color: #7b897f; background: #edf1e9; }
-.route-step.is-skipped small { max-width: 110px; color: #7b897f; text-align: center; }
-
-.route-choice {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 14px;
-  padding: 15px 17px;
-  border: 1px solid rgba(55, 95, 63, .12);
-  border-radius: 22px;
-  background: rgba(255,255,255,.72);
-  box-shadow: 0 7px 22px rgba(43,84,55,.07);
-}
-.route-choice > div:first-child > span { display: block; color: var(--muted); font-size: .65rem; font-weight: 900; letter-spacing: .08em; }
-.route-choice > div:first-child > strong { display: block; margin-top: 2px; color: var(--forest-strong); }
-.route-choice p { margin: 3px 0 0; color: var(--muted); font-size: .71rem; line-height: 1.35; }
-.route-choice-buttons { display: grid; grid-template-columns: repeat(2, minmax(118px, 1fr)); gap: 7px; }
-.route-choice-buttons button { min-height: 46px; padding: 7px 11px; border: 2px solid #dce5d8; border-radius: 14px; color: var(--forest-strong); background: #f7f8f1; font-size: .72rem; font-weight: 850; cursor: pointer; }
-.route-choice-buttons button.is-active { border-color: var(--forest); color: white; background: var(--forest); box-shadow: 0 5px 12px rgba(37,85,57,.18); }
 
 .village-modal { max-height: min(92dvh, 820px); overflow-y: auto; }
 .village-modal-resources { display: flex; gap: 8px; margin: 15px 0 7px; }
@@ -1191,8 +1171,6 @@ button:focus-visible, input:focus-visible {
   .village-cloud { left: 23px; right: auto; top: 14px; }
   .order-cards { grid-template-columns: 1fr; }
   .recipe-grid { grid-template-columns: repeat(2, 1fr); }
-  .route-choice { grid-template-columns: 1fr; }
-  .route-choice-buttons { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 430px) {

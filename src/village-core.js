@@ -1,7 +1,7 @@
 export const villageBuildings = [
   { id: "konak", name: "Kuş Konağı", icon: "🏡", copy: "Köyün kalbi; mantık ödüllerini ve dönüş hediyelerini güçlendirir.", accent: "#d88755" },
-  { id: "sera", name: "Günışığı Serası", icon: "🌿", copy: "Siparişlerden daha fazla tohum kazandırır.", accent: "#6c9d5c" },
-  { id: "atolye", name: "Bahçe Atölyesi", icon: "🛠️", copy: "Üretim ödüllerini ve dönüş hediyelerini güçlendirir.", accent: "#aa744b" },
+  { id: "sera", name: "Günışığı Serası", icon: "🌿", copy: "Köyün tohumlarını ve dönüş hediyelerini bereketlendirir.", accent: "#6c9d5c" },
+  { id: "atolye", name: "Bahçe Atölyesi", icon: "🛠️", copy: "Kuşların dönüş hediyelerine katkı sağlar; yeni oyuna hazırlanıyor.", accent: "#aa744b" },
   { id: "kutuphane", name: "Çınar Kütüphanesi", icon: "📚", copy: "Sözcüklerden daha fazla damla kazandırır.", accent: "#7586a9" }
 ];
 
