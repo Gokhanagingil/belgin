@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { Window } from "happy-dom";
+import { makeLevel, species, wordForLevel } from "../src/game-core.js";
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -22,40 +23,62 @@ test("production output targets the GitHub Pages project path", async () => {
   assert.match(html, /\/belgin\/icon\.svg/);
 });
 
-test("home, game, match and album flows stay operational", async () => {
+test("home, two-stage puzzle, scoring and album flows stay operational", async () => {
   const window = await bootApp();
   const { document } = window;
 
-  assert.match(document.body.textContent, /Kuş Bahçesi/);
-  assert.ok(document.querySelector('[data-action="play"]'));
-
+  assert.match(document.body.textContent, /KUŞLARIN ŞİFRESİ/);
   document.querySelector('[data-action="play"]').click();
-  assert.equal(document.querySelectorAll(".bird-tile").length, 24);
-  assert.equal(document.querySelectorAll(".tray-slot").length, 7);
+  assert.equal(document.querySelectorAll(".logic-cell").length, 16);
+  assert.equal(document.querySelectorAll(".palette-bird").length, 4);
+  assert.equal(document.querySelectorAll(".bird-tile").length, 0, "the old triple-match board must not return");
+  assert.match(document.body.textContent, /her kuş yalnızca bir kez/i);
 
-  const grouped = new Map();
-  for (const tile of document.querySelectorAll(".bird-tile")) {
-    const label = tile.getAttribute("aria-label");
-    grouped.set(label, [...(grouped.get(label) || []), tile]);
+  const level = makeLevel(1);
+  for (const target of level.cells.filter((cell) => !cell.given)) {
+    const bird = species.find((item) => item.id === target.solutionId);
+    const palette = document.querySelector(`[data-species="${bird.id}"]`);
+    if (!palette.classList.contains("is-selected")) palette.click();
+    document.querySelector(`[data-cell="${target.index}"]`).click();
+    await pause(5);
   }
-  const triple = [...grouped.values()].find((tiles) => tiles.length >= 3);
-  assert.ok(triple, "level one should expose at least one selectable triple");
+  await pause(850);
 
-  triple[0].click();
-  await pause(230);
-  document.querySelector(`[aria-label="${triple[0].getAttribute("aria-label")}"]`).click();
-  await pause(230);
-  document.querySelector(`[aria-label="${triple[0].getAttribute("aria-label")}"]`).click();
-  await pause(650);
+  assert.ok(document.querySelector(".word-stage"), "solving the logic grid should unlock the word stage");
+  assert.match(document.body.textContent, /Gizli sözcüğü bul/);
+  const targetWord = wordForLevel(1).word;
+  for (const character of targetWord) {
+    const button = [...document.querySelectorAll(".letter-button:not(:disabled)")].find((item) => item.textContent === character);
+    assert.ok(button, `letter ${character} should be available`);
+    button.click();
+    await pause(5);
+  }
+  await pause(850);
 
-  assert.equal(document.querySelectorAll(".bird-tile").length, 21);
-  assert.match(document.querySelector(".score-pill").textContent, /15/);
-  assert.equal(document.querySelectorAll(".tray-bird").length, 0);
+  assert.ok(document.querySelector(".result-copy"));
+  assert.match(document.querySelector(".result-copy").textContent, /Şifre çözüldü/);
+  assert.match(document.querySelector(".result-breakdown").textContent, /Bulmaca\+60/);
 
-  document.querySelector('[data-action="home"]').click();
+  document.querySelector('[data-result="home"]').click();
+  assert.match(document.querySelector(".journey-copy").textContent, /1 \/ 1200/);
   document.querySelector('[data-action="album"]').click();
   assert.ok(document.querySelector(".album-modal"));
   assert.equal(document.querySelectorAll(".album-bird").length, 12);
+  window.close();
+});
 
+test("an unfinished placement resumes exactly where it was left", async () => {
+  const window = await bootApp();
+  const { document } = window;
+  document.querySelector('[data-action="play"]').click();
+  const palette = document.querySelector(".palette-bird:not(:disabled)");
+  palette.click();
+  const speciesId = palette.dataset.species;
+  document.querySelector(".logic-cell:not(.is-given)").click();
+  document.querySelector('[data-action="home"]').click();
+  assert.match(document.querySelector('[data-action="play"]').textContent, /Kaldığın yerden/);
+  document.querySelector('[data-action="play"]').click();
+  assert.ok(document.querySelector(`.logic-cell:not(.is-given) svg`));
+  assert.ok(document.querySelector(`[data-species="${speciesId}"]`));
   window.close();
 });
