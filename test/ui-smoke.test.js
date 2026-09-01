@@ -85,11 +85,14 @@ test("one garden day connects logic, workshop, word and village progression", as
   await solveLogic(document, 1);
   assert.match(document.querySelector(".result-copy").textContent, /Bahçe dengelendi/);
   assert.match(document.querySelector(".result-breakdown").textContent, /Köy ödülü/);
+  assert.match(document.querySelector(".auto-continue").textContent, /otomatik açılıyor/);
+  assert.equal(JSON.parse(window.localStorage.getItem("kus-bahcesi-save-v1")).level, 2);
 
-  document.querySelector('[data-result="primary"]').click();
+  await pause(4200);
   assert.ok(document.querySelector(".order-screen"));
-  assert.match(document.body.textContent, /Bekleyen siparişler/);
-  assert.ok(document.querySelectorAll(".recipe-card").length >= 4);
+  assert.match(document.body.textContent, /Bugünün misafirleri/);
+  assert.match(document.body.textContent, /BUGÜNÜN HİKÂYESİ/);
+  assert.ok(document.querySelectorAll(".recipe-card").length >= 3);
 
   await solveOrder(document, 2);
   assert.match(document.querySelector(".result-copy").textContent, /Atölye şenlendi/);
@@ -148,5 +151,42 @@ test("a legacy in-progress puzzle never corrupts the new three-stage journey", a
   assert.match(document.querySelector('[aria-label="Köy kaynakları"]').textContent, /2/);
   document.querySelector('[data-action="play"]').click();
   assert.ok(document.querySelector(".logic-screen"));
+  window.close();
+});
+
+test("an old repetitive workshop save is replaced by the varied workshop", async () => {
+  const window = await bootApp({
+    save: {
+      level: 2,
+      currentGame: { version: 4, mode: "order", status: "playing", level: 2 },
+      village: { resources: { dal: 4, tohum: 4, damla: 4 }, buildings: { konak: 1, sera: 1, atolye: 1, kutuphane: 1 } }
+    }
+  });
+  const { document } = window;
+  assert.doesNotMatch(document.querySelector('[data-action="play"]').textContent, /Kaldığın yerden/);
+  document.querySelector('[data-action="play"]').click();
+  assert.ok(document.querySelector(".order-story"));
+  assert.equal(document.querySelectorAll(".customer-avatar").length, 2);
+  window.close();
+});
+
+test("the two-game route skips workshop and opens the word stage", async () => {
+  const window = await bootApp({
+    save: {
+      level: 2,
+      completed: [1],
+      village: { resources: { dal: 8, tohum: 5, damla: 5 }, buildings: { konak: 1, sera: 1, atolye: 1, kutuphane: 1 } }
+    }
+  });
+  const { document } = window;
+  document.querySelector('[data-route="classic"]').click();
+  assert.equal(document.querySelector('[data-route="classic"]').getAttribute("aria-pressed"), "true");
+  assert.ok(document.querySelector(".route-step.is-skipped"));
+  assert.match(document.body.textContent, /Siparişlere uğramadan/);
+  const stored = JSON.parse(window.localStorage.getItem("kus-bahcesi-save-v1"));
+  assert.equal(stored.level, 3);
+  assert.deepEqual(stored.skipped, [2]);
+  document.querySelector('[data-action="play"]').click();
+  assert.ok(document.querySelector(".word-stage"));
   window.close();
 });

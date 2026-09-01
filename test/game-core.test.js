@@ -14,7 +14,16 @@ import {
   stageForLevel,
   MAX_LEVEL
 } from "../src/game-core.js";
-import { craftOne, isOrderComplete, makeOrderStage, orderProgress, workshopRecipes } from "../src/order-core.js";
+import {
+  craftOne,
+  isOrderComplete,
+  makeOrderStage,
+  orderMissionComplete,
+  orderProgress,
+  workshopCustomers,
+  workshopRecipes,
+  workshopStories
+} from "../src/order-core.js";
 import { applyReward, canUpgrade, collectIdleGift, defaultVillage, normalizeVillage, stageReward, upgradeBuilding } from "../src/village-core.js";
 
 test("1,200 stages form exactly 400 three-part garden days", () => {
@@ -43,13 +52,28 @@ test("all 400 workshop stages have a proven production plan", () => {
   for (let level = 2; level <= MAX_LEVEL; level += 3) {
     const game = makeOrderStage(level);
     assert.equal(game.mode, "order");
+    assert.equal(game.orderVersion, 2);
     assert.ok(game.orders.length >= 2);
+    assert.ok(game.orders.every((order) => order.customerId && order.customerName && order.note));
+    assert.ok(game.story.title && game.mission.title);
     assert.equal(game.optimalMoves, game.solutionPlan.length);
+    assert.ok(game.solutionPlan.every((recipeId) => game.availableRecipeIds.includes(recipeId)));
     for (const recipeId of game.solutionPlan) assert.equal(craftOne(game, recipeId), true, `stage ${level} should craft ${recipeId}`);
     assert.equal(isOrderComplete(game), true, `stage ${level} should complete`);
     const progress = orderProgress(game);
     assert.equal(progress.delivered, progress.total);
   }
+});
+
+test("workshop orders vary from day one without back-to-back repeats", () => {
+  const signatures = [];
+  for (let level = 2; level <= MAX_LEVEL; level += 3) {
+    const game = makeOrderStage(level);
+    signatures.push(game.orders.map((order) => `${order.productId}x${order.required}`).sort().join("|"));
+  }
+  assert.equal(new Set(signatures.slice(0, 7)).size, 7);
+  assert.ok(signatures.every((signature, index) => !index || signature !== signatures[index - 1]));
+  assert.ok(new Set(signatures).size >= 350);
 });
 
 test("all 400 word stages contain the exact shuffled answer letters", () => {
@@ -107,6 +131,9 @@ test("missions, constants and recipe library remain explicit", () => {
   assert.equal(MAX_LEVEL, 1200);
   assert.equal(species.length, 12);
   assert.ok(workshopRecipes.length >= 10);
+  assert.ok(workshopCustomers.length >= 8);
+  assert.ok(workshopStories.length >= 8);
+  assert.equal(orderMissionComplete(makeOrderStage(2)), true);
   assert.throws(() => makeLogicStage(0), RangeError);
   assert.throws(() => makeOrderStage(0), RangeError);
   assert.throws(() => makeWordStage(1201), RangeError);
