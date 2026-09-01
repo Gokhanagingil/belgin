@@ -431,6 +431,8 @@ function wait(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
 window.addEventListener("pagehide", saveGame);
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+  window.addEventListener("load", () => navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, {
+    scope: import.meta.env.BASE_URL
+  }).catch(() => {}));
 }
 renderHome();
