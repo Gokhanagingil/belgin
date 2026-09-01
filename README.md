@@ -8,11 +8,13 @@
 
 ## Oyun döngüsü
 
-Her Bahçe Günü üç farklı zihinsel aşamadan oluşur:
+Her Bahçe Günü üç farklı zihinsel aşama sunar:
 
 1. **Sabah · Kuş Düzeni:** Her kuş türünü her satır ve sütunda yalnızca bir kez kullanarak bahçeyi tamamla.
 2. **Öğle · Atölye Siparişleri:** Ortak malzemeleri planla, ara ürünleri doğru sırayla üret ve köy siparişlerini teslim et.
 3. **Akşam · Gizli Sözcük:** İpucunu oku ve karışık harfleri doğru sıraya koy.
+
+Oyuncu dilerse **Mantık + Sözcük** yolunu kalıcı olarak seçebilir. Bu yolda Atölye Siparişleri otomatik atlanır; ilerleme, ödüller ve ertesi gün kaldığı yerden devam etme korunur. Atölye daha sonra tek dokunuşla yeniden günlük yola eklenebilir.
 
 Yanlış hamleler can ya da puan kaybettirmez. Süre sınırı yoktur; oyuncu deneyebilir, geri alabilir ve gerektiğinde yardım kullanabilir. Her aşama köyü geliştiren kaynaklar kazandırır; yıldızlar dikkatli ve yardımsız oyun için ek ustalık hedefi sunar.
 
@@ -20,12 +22,13 @@ Yanlış hamleler can ya da puan kaybettirmez. Süre sınırı yoktur; oyuncu de
 
 - 12 ayrı bölgeye yayılan 400 Bahçe Günü ve toplam 1.200 deterministik aşama
 - 4×4'ten 6×6'ya ilerleyen mantık zorluğu
-- 11 tariflik, çok adımlı ve her bölümü çözülebilirliği kanıtlanmış üretim sistemi
+- 14 tariflik, farklı müşteriler ve günlük hikâyeler içeren, çözülebilirliği kanıtlanmış üretim sistemi
 - 80 özgün Türkçe sözcük ve ipucu
 - Dört kalıcı köy binası, kaynak ekonomisi ve sekiz saate kadar biriken dönüş hediyesi
 - Dönüşümlü aşama görevleri ve üç yıldız ustalık sistemi
 - Tarihe bağlı günlük özel görev
 - Otomatik kayıt; üç oyun türünün de ortasından devam
+- Kalıcı, her an değiştirilebilen iki oyunlu veya üç oyunlu ilerleme yolu
 - 12 kuşluk keşif albümü
 
 ## UX ve erişilebilirlik
@@ -35,6 +38,7 @@ Yanlış hamleler can ya da puan kaybettirmez. Süre sınırı yoktur; oyuncu de
 - Çakışmaları açıklayan anlık, cezalandırmayan geri bildirim
 - Geri alma, çakışmaları temizleme ve doğru yer ipucu
 - Siparişlerde geri alma, sıfırlama ve bağlama duyarlı sıradaki adım desteği
+- Her başarıdan sonra kısa kutlamayla otomatik sonraki aşamaya geçiş
 - Ses, titreşim, büyük yazı, yüksek kontrast ve hareket azaltma ayarları
 - Semantik kontroller, ekran okuyucu etiketleri ve görünür klavye odağı
 - Ana ekrana ekleme ve çevrimdışı devam desteği
