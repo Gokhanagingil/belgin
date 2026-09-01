@@ -1,7 +1,7 @@
 {
-  "name": "Kuş Bahçesi",
-  "short_name": "Kuş Bahçesi",
-  "description": "Kuşları mantıkla yerleştir, bahçenin gizli sözcüklerini çöz.",
+  "name": "Kuş Köyü",
+  "short_name": "Kuş Köyü",
+  "description": "Kuşları düzenle, siparişleri planla, gizli sözcükleri çöz ve köyünü büyüt.",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#ecf7ec",

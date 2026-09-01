@@ -1,4 +1,4 @@
-const CACHE = "kus-bahcesi-v3";
+const CACHE = "kus-koyu-v4";
 const BASE = self.registration.scope;
 const SHELL = [BASE, `${BASE}index.html`, `${BASE}manifest.webmanifest`, `${BASE}icon.svg`];
 
