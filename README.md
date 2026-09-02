@@ -6,6 +6,8 @@
 
 **[Kuş Köyü'nü aç](https://gokhanagingil.github.io/belgin/)**
 
+**[Android pilot APK’yı indir](https://github.com/Gokhanagingil/belgin/releases/latest)**
+
 ## Oyun döngüsü
 
 Her Bahçe Günü üç farklı zihinsel aşama sunar:

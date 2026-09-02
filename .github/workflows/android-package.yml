@@ -40,7 +40,7 @@ on:
       - ".github/workflows/android-package.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: android-${{ github.ref }}
@@ -149,6 +149,25 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish permanent pilot release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: android
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          pilot_apk="Kus-Koyu-${VERSION_NAME_INPUT}-pilot.apk"
+          release_tag="v${VERSION_NAME_INPUT}"
+          cp app/build/outputs/apk/debug/app-debug.apk "$pilot_apk"
+          if gh release view "$release_tag" >/dev/null 2>&1; then
+            gh release upload "$release_tag" "$pilot_apk" --clobber
+          else
+            gh release create "$release_tag" "$pilot_apk" \
+              --target "$GITHUB_SHA" \
+              --title "Kuş Köyü ${VERSION_NAME_INPUT} · Pilot" \
+              --notes "Android cihaz denemesi için pilot APK. Google test reklamlarını kullanır; gelir üretmez ve Play Store imzalı sürüm değildir."
+          fi
 
       - name: Upload Store AAB
         if: inputs.channel == 'store'

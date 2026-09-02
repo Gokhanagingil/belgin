@@ -10,6 +10,7 @@ npm run android:debug
 Çıktı: `android/app/build/outputs/apk/debug/app-debug.apk`
 
 Pilot paket, Google’ın resmi test reklam kimliğini kullanır. Test reklamı gelir üretmez ve güvenli cihaz denemesi içindir.
+`main` dalındaki başarılı Android derlemesi pilot APK’yı aynı sürüm etiketindeki GitHub Release’a kalıcı olarak yükler.
 
 ## Play Store AAB
 
