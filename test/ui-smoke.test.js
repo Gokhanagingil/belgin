@@ -49,12 +49,28 @@ async function solveWord(document, levelNumber) {
   await pause();
 }
 
+function swipeFleet(document, direction) {
+  const board = document.querySelector(".fleet-board");
+  assert.ok(board, "fleet sea should be available for swiping");
+  const points = {
+    left: [[180, 100], [80, 100]],
+    right: [[80, 100], [180, 100]],
+    up: [[100, 180], [100, 80]],
+    down: [[100, 80], [100, 180]]
+  }[direction];
+  const PointerEvent = document.defaultView.PointerEvent || document.defaultView.MouseEvent;
+  board.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, clientX: points[0][0], clientY: points[0][1] }));
+  board.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerId: 1, clientX: points[1][0], clientY: points[1][1] }));
+}
+
+function finishFleetHelp(document) {
+  for (let page = 0; page < 3; page += 1) document.querySelector("[data-fleet-help-next]").click();
+}
+
 async function solveFleet(document) {
   const directions = ["left", "up", "right", "down"];
   for (let move = 0; move < 500 && !document.querySelector(".result-copy"); move += 1) {
-    const button = document.querySelector(`[data-fleet-direction="${directions[move % directions.length]}"]`);
-    assert.ok(button, "fleet direction controls should remain available");
-    button.click();
+    swipeFleet(document, directions[move % directions.length]);
     await pause(2);
     const rescue = document.querySelector("[data-reset-fleet]");
     if (rescue) rescue.click();
@@ -107,6 +123,9 @@ test("one garden day connects logic, word and village progression", async () => 
   await pause(4200);
   assert.ok(document.querySelector(".fleet-screen"));
   assert.equal(document.querySelectorAll(".fleet-tile").length, 16);
+  assert.ok(document.querySelector("[data-fleet-help]"));
+  finishFleetHelp(document);
+  assert.equal(document.querySelectorAll("[data-fleet-direction]").length, 0, "the mobile fleet must not use direction buttons");
   await solveFleet(document);
   assert.match(document.querySelector(".result-copy").textContent, /Filo büyüdü/);
   document.querySelector('[data-result="primary"]').click();
@@ -181,6 +200,29 @@ test("the word game has a visible undo and non-placing clues", async () => {
   document.querySelector('[data-action="word-hint"]').click();
   assert.equal(document.querySelectorAll(".answer-slot.is-filled").length, 0, "a word hint must not enter a letter");
   assert.match(document.querySelector(".word-hint-coach").textContent, /başlıyor/i);
+  window.close();
+});
+
+test("fleet teaches a button-free swipe and explains the first image merge", async () => {
+  const window = await bootApp({ save: { level: 2, hasStarted: true, fleetTutorialSeen: true, fleetGesturePracticed: false } });
+  const { document } = window;
+  document.querySelector('[data-action="play"]').click();
+  assert.ok(document.querySelector(".fleet-screen"));
+  assert.equal(document.querySelectorAll("[data-fleet-direction]").length, 0);
+  assert.equal(document.querySelectorAll(".fleet-rank").length, 0, "bare 2048 rank numbers should not appear on ship tiles");
+  assert.equal(document.querySelectorAll('.fleet-tile[aria-label^="Minik Kayık"]').length, 2);
+  assert.match(document.querySelector(".fleet-gesture-coach").textContent, /denizin üzerinde.*sola.*kaydır/i);
+  swipeFleet(document, "left");
+  await pause();
+  assert.match(document.querySelector(".fleet-feedback").textContent, /Yelkenli Sandal oluştu/i);
+  assert.ok(document.querySelector(".fleet-gesture-coach"), "the coach should remain for a second practice swipe");
+  swipeFleet(document, "right");
+  await pause();
+  assert.equal(document.querySelector(".fleet-gesture-coach"), null);
+  assert.equal(JSON.parse(window.localStorage.getItem("kus-bahcesi-save-v1")).fleetGesturePracticed, true);
+  document.querySelector('[data-action="fleet-help"]').click();
+  assert.match(document.querySelector(".fleet-help-modal").textContent, /Denizin üzerinde kaydır/);
+  assert.ok(document.querySelector("[data-close-fleet-help]"));
   window.close();
 });
 

@@ -60,12 +60,11 @@ export function makeFleetStage(level, daily = false, date = new Date(), voyage =
     history: [],
     helpsUsed: 0,
     undoCount: 0,
+    tutorialMoves: 0,
+    fleetFeedback: null,
     busy: false
   };
-  if (!game.board.some(Boolean)) {
-    spawnFleetTile(game);
-    spawnFleetTile(game);
-  }
+  if (!game.board.some(Boolean)) startFleetBoard(game);
   return game;
 }
 
@@ -74,7 +73,7 @@ export function fleetTargetForDay(day) {
 }
 
 export function applyFleetMove(game, direction) {
-  if (!game || game.mode !== "fleet" || game.busy || game.status !== "playing") return { moved: false, score: 0, merges: 0 };
+  if (!game || game.mode !== "fleet" || game.busy || game.status !== "playing") return { moved: false, score: 0, merges: 0, createdRanks: [] };
   const result = slideFleet(game.board, direction);
   if (!result.moved) return result;
   game.history.push({
@@ -111,11 +110,12 @@ export function undoFleetMove(game) {
 
 export function slideFleet(board, direction) {
   if (!validBoard(board) || !["left", "right", "up", "down"].includes(direction)) {
-    return { board: validBoard(board) ? [...board] : Array(FLEET_SIZE ** 2).fill(0), moved: false, score: 0, merges: 0 };
+    return { board: validBoard(board) ? [...board] : Array(FLEET_SIZE ** 2).fill(0), moved: false, score: 0, merges: 0, createdRanks: [] };
   }
   const next = [...board];
   let score = 0;
   let merges = 0;
+  const createdRanks = [];
   for (const indices of movementLines(direction)) {
     const compact = indices.map((index) => board[index]).filter(Boolean);
     const merged = [];
@@ -123,6 +123,7 @@ export function slideFleet(board, direction) {
       if (compact[index] === compact[index + 1] && compact[index] < fleetVessels.length) {
         const rank = compact[index] + 1;
         merged.push(rank);
+        createdRanks.push(rank);
         score += 2 ** (rank + 1);
         merges += 1;
         index += 1;
@@ -131,7 +132,15 @@ export function slideFleet(board, direction) {
     while (merged.length < FLEET_SIZE) merged.push(0);
     indices.forEach((boardIndex, offset) => { next[boardIndex] = merged[offset]; });
   }
-  return { board: next, moved: next.some((value, index) => value !== board[index]), score, merges };
+  return { board: next, moved: next.some((value, index) => value !== board[index]), score, merges, createdRanks };
+}
+
+export function fleetMoveAdvice(board) {
+  if (!validBoard(board)) return null;
+  const directions = ["left", "right", "up", "down"];
+  return directions.find((direction) => slideFleet(board, direction).merges > 0)
+    || directions.find((direction) => slideFleet(board, direction).moved)
+    || null;
 }
 
 export function hasFleetMoves(board) {
@@ -150,8 +159,9 @@ export function hasFleetMoves(board) {
 export function resetFleetBoard(game) {
   game.board = Array(FLEET_SIZE ** 2).fill(0);
   game.history = [];
-  spawnFleetTile(game);
-  spawnFleetTile(game);
+  game.tutorialMoves = 0;
+  game.fleetFeedback = null;
+  startFleetBoard(game);
 }
 
 export function fleetMissionComplete(game) {
@@ -178,6 +188,12 @@ function spawnFleetTile(game) {
   const position = empty[Math.floor(nextRandom(game) * empty.length)];
   game.board[position] = nextRandom(game) < 0.9 ? 1 : 2;
   return true;
+}
+
+function startFleetBoard(game) {
+  // İlk hamlede kuralı tesadüfe bırakma: ortadaki iki kayık tek kaydırmayla birleşebilir.
+  game.board[5] = 1;
+  game.board[6] = 1;
 }
 
 function nextRandom(game) {

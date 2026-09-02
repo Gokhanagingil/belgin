@@ -34,7 +34,7 @@ Repository secrets:
 ## Sürüm kuralları
 
 - `versionCode` her Play Store yüklemesinde artmalıdır.
-- `versionName` kullanıcıya gösterilen sürümdür; Büyük Filo adayı `1.1.0` olarak hazırlanmıştır.
+- `versionName` kullanıcıya gösterilen sürümdür; tuşsuz ve öğreticili Büyük Filo sürümü `1.2.0` olarak hazırlanmıştır.
 - Güncel hedef: Android 16 / API 36.
 - Minimum destek: Android 7 / API 24.
 
