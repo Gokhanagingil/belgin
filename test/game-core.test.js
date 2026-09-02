@@ -30,6 +30,7 @@ import {
 import {
   applyFleetMove,
   fleetMissionComplete,
+  fleetTargetForDay,
   fleetVessels,
   hasFleetMoves,
   makeFleetStage,
@@ -59,13 +60,21 @@ test("fleet slides, merges, spawns and undo stay deterministic", () => {
   assert.deepEqual(left.board.slice(4, 8), [3, 0, 0, 0]);
   assert.equal(left.merges, 4);
   assert.deepEqual(left.createdRanks, [2, 2, 3, 4]);
+  assert.deepEqual(left.mergedIndices, [0, 1, 4, 12]);
+  assert.ok(left.transitions.every((transition) => transition.merged));
 
   const game = makeFleetStage(2);
+  assert.equal(game.targetMerges, 8, "the opening voyage should last longer than the old five-merge mission");
+  assert.equal(fleetTargetForDay(400), 11);
   assert.deepEqual(game.board.slice(4, 8), [0, 1, 1, 0], "the first fleet move should teach a guaranteed merge");
   const before = [...game.board];
   const direction = ["left", "right", "up", "down"].find((item) => slideFleet(game.board, item).moved);
   assert.ok(direction);
-  assert.equal(applyFleetMove(game, direction).moved, true);
+  const moved = applyFleetMove(game, direction);
+  assert.equal(moved.moved, true);
+  assert.equal(moved.mergedIndices.length, 1);
+  assert.ok(Number.isInteger(moved.spawnedTile.index));
+  assert.equal(game.board[moved.spawnedTile.index], moved.spawnedTile.rank);
   assert.notDeepEqual(game.board, before);
   assert.equal(undoFleetMove(game), true);
   assert.deepEqual(game.board, before);

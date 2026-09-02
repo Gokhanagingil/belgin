@@ -34,7 +34,7 @@ Repository secrets:
 ## Sürüm kuralları
 
 - `versionCode` her Play Store yüklemesinde artmalıdır.
-- `versionName` kullanıcıya gösterilen sürümdür; tuşsuz ve öğreticili Büyük Filo sürümü `1.2.0` olarak hazırlanmıştır.
+- `versionName` kullanıcıya gösterilen sürümdür; uzatılmış sefer ve ayrıştırılmış Filo hareket efektleri `1.3.0` sürümünde hazırlanmıştır.
 - Güncel hedef: Android 16 / API 36.
 - Minimum destek: Android 7 / API 24.
 
