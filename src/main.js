@@ -17,6 +17,7 @@ import {
   defaultFleetVoyage,
   fleetMoveAdvice,
   fleetMissionComplete,
+  fleetTargetForDay,
   fleetVessels,
   fleetVoyageFromGame,
   hasFleetMoves,
@@ -549,6 +550,8 @@ function renderFleetGame() {
   const app = document.querySelector("#app");
   if (!Number.isInteger(game.tutorialMoves)) game.tutorialMoves = 0;
   if (!game.fleetFeedback || typeof game.fleetFeedback !== "object") game.fleetFeedback = null;
+  game.targetMerges = Math.max(Number(game.targetMerges) || 0, fleetTargetForDay(game.day));
+  const lastMove = game.lastFleetMove && typeof game.lastFleetMove === "object" ? game.lastFleetMove : null;
   const progress = Math.min(100, Math.round((game.merges / game.targetMerges) * 100));
   const best = vesselForRank(game.bestRank);
   const remaining = Math.max(0, game.targetMerges - game.merges);
@@ -558,7 +561,7 @@ function renderFleetGame() {
     <div class="fleet-progress-summary"><div class="progress-wrap" aria-label="Bugünkü hedefte ${game.merges} birleşme tamamlandı, ${remaining} birleşme kaldı"><div class="progress-track fleet-progress"><div class="progress-fill" style="width:${progress}%"></div></div><div class="progress-label">${game.merges} / ${game.targetMerges}</div></div><strong>${remaining ? `Hedefe ${remaining} birleşme kaldı` : "Hedef tamamlandı"}</strong></div>
     <aside class="fleet-mission"><div class="fleet-best">${shipSvg(best, true)}</div><div><div class="fleet-mission-head"><span>Bugünkü sefer</span><button class="fleet-help-button" data-action="fleet-help" aria-label="Büyük Filo nasıl oynanır?">? Nasıl oynanır</button></div><strong>Aynı gemileri birleştir</strong><small>En büyük gemin: ${best.name} · Filo puanın: ${game.totalScore}</small></div></aside>
     ${fleetMergeGuideMarkup()}
-    <div class="fleet-board-wrap"><div class="fleet-board-stage">${gestureCoach}<div class="fleet-board ${gestureCoach ? "is-learning-swipe" : ""} ${game.lastDirection ? `fleet-move-${game.lastDirection}` : ""}" role="grid" aria-label="Büyük Filo oyun alanı. Gemileri taşımak için denizin üzerinde parmağını kaydır.">${game.board.map((rank, index) => fleetTileMarkup(rank, index)).join("")}</div></div><p class="fleet-swipe-help"><strong>Oynamak için mavi denizin üzerinde parmağını kaydır.</strong><span>Bütün gemiler seçtiğin yöne gider. Her hamlede yeni bir Kayık gelebilir.</span></p></div>
+    <div class="fleet-board-wrap"><div class="fleet-board-stage">${gestureCoach}<div class="fleet-board ${gestureCoach ? "is-learning-swipe" : ""} ${lastMove?.direction ? `fleet-move-${lastMove.direction}` : ""}" role="grid" aria-label="Büyük Filo oyun alanı. Gemileri taşımak için denizin üzerinde parmağını kaydır.">${game.board.map((rank, index) => fleetTileMarkup(rank, index, lastMove)).join("")}</div></div><p class="fleet-swipe-help"><strong>Oynamak için mavi denizin üzerinde parmağını kaydır.</strong><span>Bütün gemiler seçtiğin yöne gider. Her başarılı kaydırmadan sonra yeni bir tekne suya iner.</span></p></div>
     ${fleetFeedbackMarkup()}
     <div class="power-row fleet-actions"><button class="power-button" data-action="fleet-undo" ${game.history.length ? "" : "disabled"}>${icon("undo")}<span>Geri al</span></button><button class="power-button" data-action="fleet-album">⚓<span>Filo defteri</span></button></div>
   </section></main>`;
@@ -588,14 +591,19 @@ function renderFleetGame() {
   });
   board.addEventListener("pointercancel", () => { startPoint = null; });
   applyA11yClasses();
-  game.lastDirection = null;
+  game.lastFleetMove = null;
   if (!save.fleetTutorialSeen) openFleetHelp(true);
 }
 
-function fleetTileMarkup(rank, index) {
+function fleetTileMarkup(rank, index, lastMove = null) {
   if (!rank) return `<div class="fleet-tile is-empty" role="gridcell" aria-label="Boş deniz karesi"></div>`;
   const vessel = vesselForRank(rank);
-  return `<div class="fleet-tile fleet-rank-${rank}" role="gridcell" aria-label="${vessel.name}, ${vessel.rank}. gemi kademesi" style="--fleet-color:${vessel.color};--fleet-accent:${vessel.accent}">${shipSvg(vessel, true)}<strong>${vessel.short}</strong></div>`;
+  const transition = lastMove?.transitions?.find((item) => item.toIndex === index);
+  const isMerged = Boolean(lastMove?.mergedIndices?.includes(index));
+  const isNew = lastMove?.spawnedTile?.index === index;
+  const travel = Math.max(0, Math.min(3, Math.round(transition?.distance || 0)));
+  const stateLabel = isNew ? "Yeni gelen " : isMerged ? "Birleşmeyle oluşan " : "";
+  return `<div class="fleet-tile fleet-rank-${rank} fleet-travel-${travel}${isMerged ? " is-merged" : ""}${isNew ? " is-new" : ""}" role="gridcell" aria-label="${stateLabel}${vessel.name}, ${vessel.rank}. gemi kademesi" style="--fleet-color:${vessel.color};--fleet-accent:${vessel.accent}">${shipSvg(vessel, true)}<strong>${vessel.short}</strong></div>`;
 }
 
 const fleetDirectionMeta = {
@@ -663,6 +671,7 @@ async function moveFleet(direction) {
   const previousBest = game.bestRank;
   const result = applyFleetMove(game, direction);
   if (!result.moved) {
+    game.lastFleetMove = null;
     game.fleetFeedback = { kind: "notice", title: "Bu yönde hareket yok", copy: "Başka bir yöne kaydır. Puanın ve hakkın kaybolmadı." };
     playTone(190, .07);
     haptic(18);
@@ -674,17 +683,24 @@ async function moveFleet(direction) {
   game.tutorialMoves += 1;
   if (game.tutorialMoves >= 2) save.fleetGesturePracticed = true;
   const remaining = Math.max(0, game.targetMerges - game.merges);
+  const spawned = result.spawnedTile ? vesselForRank(result.spawnedTile.rank) : null;
+  const arrivalCopy = spawned ? ` Yeni bir ${spawned.short} suya indi.` : "";
   if (result.merges === 1) {
     const created = vesselForRank(result.createdRanks[0]);
     const source = vesselForRank(result.createdRanks[0] - 1);
-    game.fleetFeedback = { kind: "success", title: `${created.name} oluştu!`, copy: `İki ${source.short} birleşti. ${remaining ? `Hedefe ${remaining} birleşme kaldı.` : "Bugünkü hedef tamamlandı."}` };
+    game.fleetFeedback = { kind: "success", title: `${created.name} oluştu!`, copy: `İki ${source.short} birleşti.${arrivalCopy} ${remaining ? `Hedefe ${remaining} birleşme kaldı.` : "Bugünkü hedef tamamlandı."}` };
   } else if (result.merges > 1) {
-    game.fleetFeedback = { kind: "success", title: `${result.merges} çift gemi birleşti!`, copy: remaining ? `Harika hamle. Hedefe ${remaining} birleşme kaldı.` : "Harika hamle. Bugünkü hedef tamamlandı." };
+    game.fleetFeedback = { kind: "success", title: `${result.merges} çift gemi birleşti!`, copy: `Harika hamle.${arrivalCopy} ${remaining ? `Hedefe ${remaining} birleşme kaldı.` : "Bugünkü hedef tamamlandı."}` };
   } else {
     const meta = fleetDirectionMeta[direction];
-    game.fleetFeedback = { kind: "info", title: `Gemiler ${meta.label} kaydı`, copy: "Bu hamlede birleşme olmadı. Aynı iki gemiyi buluşturmaya çalış." };
+    game.fleetFeedback = { kind: "info", title: `Gemiler ${meta.label} kaydı`, copy: `Bu hamlede birleşme olmadı.${arrivalCopy} Aynı iki gemiyi buluşturmaya çalış.` };
   }
-  game.lastDirection = direction;
+  game.lastFleetMove = {
+    direction,
+    mergedIndices: result.mergedIndices,
+    transitions: result.transitions,
+    spawnedTile: result.spawnedTile
+  };
   playTone(result.merges ? 560 : 380, .06);
   haptic(result.merges ? [12, 20, 12] : 10);
   renderFleetGame();
@@ -696,7 +712,7 @@ async function moveFleet(direction) {
   }
   if (fleetMissionComplete(game)) {
     game.busy = true;
-    await wait(settings.reduceMotion ? 1 : 600);
+    await wait(settings.reduceMotion ? 1 : 900);
     finishStage();
     return;
   }

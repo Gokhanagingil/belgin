@@ -69,11 +69,13 @@ export function makeFleetStage(level, daily = false, date = new Date(), voyage =
 }
 
 export function fleetTargetForDay(day) {
-  return Math.min(12, 5 + Math.floor((Math.max(1, day) - 1) / 55));
+  // İlk seferi birkaç kaydırmada bitirmeden, 4x4 alanı rahat okunur tutacak tempo.
+  const safeDay = Math.max(1, Math.floor(Number(day) || 1));
+  return Math.min(12, 8 + Math.floor((safeDay - 1) / 100));
 }
 
 export function applyFleetMove(game, direction) {
-  if (!game || game.mode !== "fleet" || game.busy || game.status !== "playing") return { moved: false, score: 0, merges: 0, createdRanks: [] };
+  if (!game || game.mode !== "fleet" || game.busy || game.status !== "playing") return emptyMoveResult(game?.board);
   const result = slideFleet(game.board, direction);
   if (!result.moved) return result;
   game.history.push({
@@ -91,8 +93,8 @@ export function applyFleetMove(game, direction) {
   const rank = Math.max(...game.board);
   if (rank > game.bestRank) game.bestRank = rank;
   for (let value = 1; value <= game.bestRank; value += 1) if (!game.discovered.includes(value)) game.discovered.push(value);
-  spawnFleetTile(game);
-  return result;
+  const spawnedTile = spawnFleetTile(game);
+  return { ...result, spawnedTile };
 }
 
 export function undoFleetMove(game) {
@@ -110,29 +112,60 @@ export function undoFleetMove(game) {
 
 export function slideFleet(board, direction) {
   if (!validBoard(board) || !["left", "right", "up", "down"].includes(direction)) {
-    return { board: validBoard(board) ? [...board] : Array(FLEET_SIZE ** 2).fill(0), moved: false, score: 0, merges: 0, createdRanks: [] };
+    return emptyMoveResult(board);
   }
   const next = [...board];
   let score = 0;
   let merges = 0;
   const createdRanks = [];
+  const mergedIndices = [];
+  const transitions = [];
   for (const indices of movementLines(direction)) {
-    const compact = indices.map((index) => board[index]).filter(Boolean);
+    const compact = indices
+      .map((index) => ({ rank: board[index], sourceIndex: index }))
+      .filter((tile) => tile.rank);
     const merged = [];
     for (let index = 0; index < compact.length; index += 1) {
-      if (compact[index] === compact[index + 1] && compact[index] < fleetVessels.length) {
-        const rank = compact[index] + 1;
+      const targetIndex = indices[merged.length];
+      if (compact[index].rank === compact[index + 1]?.rank && compact[index].rank < fleetVessels.length) {
+        const rank = compact[index].rank + 1;
         merged.push(rank);
         createdRanks.push(rank);
+        mergedIndices.push(targetIndex);
+        transitions.push({
+          rank,
+          fromIndices: [compact[index].sourceIndex, compact[index + 1].sourceIndex],
+          toIndex: targetIndex,
+          distance: fleetTravelDistance([compact[index].sourceIndex, compact[index + 1].sourceIndex], targetIndex, direction),
+          merged: true
+        });
         score += 2 ** (rank + 1);
         merges += 1;
         index += 1;
-      } else merged.push(compact[index]);
+      } else {
+        merged.push(compact[index].rank);
+        transitions.push({
+          rank: compact[index].rank,
+          fromIndices: [compact[index].sourceIndex],
+          toIndex: targetIndex,
+          distance: fleetTravelDistance([compact[index].sourceIndex], targetIndex, direction),
+          merged: false
+        });
+      }
     }
     while (merged.length < FLEET_SIZE) merged.push(0);
     indices.forEach((boardIndex, offset) => { next[boardIndex] = merged[offset]; });
   }
-  return { board: next, moved: next.some((value, index) => value !== board[index]), score, merges, createdRanks };
+  return {
+    board: next,
+    moved: next.some((value, index) => value !== board[index]),
+    score,
+    merges,
+    createdRanks,
+    mergedIndices,
+    transitions,
+    spawnedTile: null
+  };
 }
 
 export function fleetMoveAdvice(board) {
@@ -184,10 +217,11 @@ export function vesselForRank(rank) {
 
 function spawnFleetTile(game) {
   const empty = game.board.map((value, index) => value ? -1 : index).filter((index) => index >= 0);
-  if (!empty.length) return false;
-  const position = empty[Math.floor(nextRandom(game) * empty.length)];
-  game.board[position] = nextRandom(game) < 0.9 ? 1 : 2;
-  return true;
+  if (!empty.length) return null;
+  const index = empty[Math.floor(nextRandom(game) * empty.length)];
+  const rank = nextRandom(game) < 0.9 ? 1 : 2;
+  game.board[index] = rank;
+  return { index, rank };
 }
 
 function startFleetBoard(game) {
@@ -214,6 +248,24 @@ function movementLines(direction) {
     lines.push(indices);
   }
   return lines;
+}
+
+function fleetTravelDistance(fromIndices, toIndex, direction) {
+  const divisor = direction === "up" || direction === "down" ? FLEET_SIZE : 1;
+  return Math.min(3, Math.max(...fromIndices.map((index) => Math.abs(index - toIndex) / divisor)));
+}
+
+function emptyMoveResult(board) {
+  return {
+    board: validBoard(board) ? [...board] : Array(FLEET_SIZE ** 2).fill(0),
+    moved: false,
+    score: 0,
+    merges: 0,
+    createdRanks: [],
+    mergedIndices: [],
+    transitions: [],
+    spawnedTile: null
+  };
 }
 
 function validBoard(board) {

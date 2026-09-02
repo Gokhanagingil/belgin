@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { Window } from "happy-dom";
 import { makeLogicStage, makeWordStage, species } from "../src/game-core.js";
+import { makeFleetStage } from "../src/fleet-core.js";
 
 const pause = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -214,6 +215,10 @@ test("fleet teaches a button-free swipe and explains the first image merge", asy
   assert.match(document.querySelector(".fleet-gesture-coach").textContent, /denizin üzerinde.*sola.*kaydır/i);
   swipeFleet(document, "left");
   await pause();
+  assert.ok(document.querySelector(".fleet-board.fleet-move-left"), "the sea current should follow the swipe direction");
+  assert.equal(document.querySelectorAll(".fleet-tile.is-merged").length, 1, "the merged vessel should be highlighted");
+  assert.equal(document.querySelectorAll(".fleet-tile.is-new").length, 1, "the newly spawned vessel should be highlighted separately");
+  assert.match(document.querySelector(".fleet-tile.is-new").getAttribute("aria-label"), /^Yeni gelen/);
   assert.match(document.querySelector(".fleet-feedback").textContent, /Yelkenli Sandal oluştu/i);
   assert.ok(document.querySelector(".fleet-gesture-coach"), "the coach should remain for a second practice swipe");
   swipeFleet(document, "right");
@@ -223,6 +228,18 @@ test("fleet teaches a button-free swipe and explains the first image merge", asy
   document.querySelector('[data-action="fleet-help"]').click();
   assert.match(document.querySelector(".fleet-help-modal").textContent, /Denizin üzerinde kaydır/);
   assert.ok(document.querySelector("[data-close-fleet-help]"));
+  window.close();
+});
+
+test("an unfinished short fleet voyage adopts the longer mission", async () => {
+  const currentGame = makeFleetStage(2);
+  currentGame.targetMerges = 5;
+  const window = await bootApp({
+    save: { level: 2, hasStarted: true, fleetTutorialSeen: true, fleetGesturePracticed: true, currentGame }
+  });
+  const { document } = window;
+  document.querySelector('[data-action="play"]').click();
+  assert.match(document.querySelector(".fleet-progress-summary").textContent, /0 \/ 8/);
   window.close();
 });
 
