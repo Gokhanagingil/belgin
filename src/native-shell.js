@@ -10,8 +10,10 @@ import {
 } from "@capacitor-community/admob";
 
 const GOOGLE_TEST_BANNER_ID = "ca-app-pub-3940256099942544/9214589741";
+const GOOGLE_TEST_REWARDED_ID = "ca-app-pub-3940256099942544/5224354917";
 const productionAds = import.meta.env.VITE_ADMOB_MODE === "production";
 const bannerId = productionAds ? import.meta.env.VITE_ADMOB_BANNER_ID : GOOGLE_TEST_BANNER_ID;
+const rewardedId = productionAds ? import.meta.env.VITE_ADMOB_REWARDED_ID : GOOGLE_TEST_REWARDED_ID;
 const adsEnabled = import.meta.env.VITE_ADMOB_ENABLED !== "false";
 
 let adInitialization;
@@ -89,6 +91,21 @@ export async function showPrivacyChoices() {
   try {
     await AdMob.showPrivacyOptionsForm();
     return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function watchRewardedHintAd() {
+  if (!isNativeApp() || !rewardedId || !(await prepareAds())) return false;
+  try {
+    await AdMob.prepareRewardVideoAd({
+      adId: rewardedId,
+      isTesting: !productionAds,
+      immersiveMode: true
+    });
+    const reward = await AdMob.showRewardVideoAd({ adId: rewardedId });
+    return Number(reward?.amount || 0) > 0;
   } catch {
     return false;
   }

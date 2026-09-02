@@ -14,11 +14,11 @@ on:
       version_code:
         description: Increasing Play Store version code
         required: true
-        default: "1"
+        default: "2"
       version_name:
         description: User-visible version
         required: true
-        default: "1.0.0"
+        default: "1.1.0"
   pull_request:
     paths:
       - "android/**"
@@ -51,10 +51,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      VERSION_CODE_INPUT: ${{ inputs.version_code || '1' }}
-      VERSION_NAME_INPUT: ${{ inputs.version_name || '1.0.0' }}
+      VERSION_CODE_INPUT: ${{ inputs.version_code || '2' }}
+      VERSION_NAME_INPUT: ${{ inputs.version_name || '1.1.0' }}
       ADMOB_APP_ID: ${{ vars.ADMOB_APP_ID }}
       ADMOB_BANNER_ID: ${{ vars.ADMOB_BANNER_ID }}
+      ADMOB_REWARDED_ID: ${{ vars.ADMOB_REWARDED_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -91,12 +92,14 @@ jobs:
         run: |
           test -n "$ADMOB_APP_ID"
           test -n "$ADMOB_BANNER_ID"
+          test -n "$ADMOB_REWARDED_ID"
           test -n "$KEYSTORE_BASE64"
           test -n "$KEYSTORE_PASSWORD"
           test -n "$KEY_ALIAS"
           test -n "$KEY_PASSWORD"
           [[ "$ADMOB_APP_ID" != "ca-app-pub-3940256099942544~3347511713" ]]
           [[ "$ADMOB_BANNER_ID" != "ca-app-pub-3940256099942544/9214589741" ]]
+          [[ "$ADMOB_REWARDED_ID" != "ca-app-pub-3940256099942544/5224354917" ]]
 
       - name: Build pilot web bundle
         if: inputs.channel != 'store'
@@ -109,6 +112,7 @@ jobs:
         env:
           VITE_ADMOB_MODE: production
           VITE_ADMOB_BANNER_ID: ${{ vars.ADMOB_BANNER_ID }}
+          VITE_ADMOB_REWARDED_ID: ${{ vars.ADMOB_REWARDED_ID }}
         run: npm run build:android-web
 
       - run: npx cap sync android

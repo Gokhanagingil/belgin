@@ -8,9 +8,23 @@ import {
   inventoryFor,
   isGridSolved,
   missionComplete,
+  logicHintFor,
   gardenDay,
   stageForLevel
 } from "./game-core.js";
+import {
+  applyFleetMove,
+  defaultFleetVoyage,
+  fleetMissionComplete,
+  fleetVessels,
+  fleetVoyageFromGame,
+  hasFleetMoves,
+  makeFleetStage,
+  normalizeFleetVoyage,
+  resetFleetBoard,
+  undoFleetMove,
+  vesselForRank
+} from "./fleet-core.js";
 import {
   defaultVillage,
   villageBuildings,
@@ -32,7 +46,8 @@ import {
   openPrivacyPolicy,
   registerNativeBackHandler,
   showHomeBanner,
-  showPrivacyChoices
+  showPrivacyChoices,
+  watchRewardedHintAd
 } from "./native-shell.js";
 
 const STORAGE_KEY = "kus-bahcesi-save-v1";
@@ -52,7 +67,10 @@ const defaultSave = {
   skipOrders: true,
   dailyCompleted: [],
   village: defaultVillage,
-  currentGame: null
+  currentGame: null,
+  hasStarted: false,
+  logicTutorialDays: [],
+  fleetVoyage: defaultFleetVoyage
 };
 
 const defaultSettings = {
@@ -64,9 +82,13 @@ const defaultSettings = {
   reduceMotion: false
 };
 
+const storedSaveHasStartedFlag = storedObjectHasOwn(STORAGE_KEY, "hasStarted");
 let save = loadJson(STORAGE_KEY, defaultSave);
 save.village = normalizeVillage(save.village);
 save.skipped = Array.isArray(save.skipped) ? save.skipped : [];
+save.logicTutorialDays = Array.isArray(save.logicTutorialDays) ? save.logicTutorialDays : [];
+save.fleetVoyage = normalizeFleetVoyage(save.fleetVoyage);
+if (!storedSaveHasStartedFlag) save.hasStarted = inferStartedState(save);
 let settings = loadJson(SETTINGS_KEY, defaultSettings);
 let game = null;
 let toastTimer = null;
@@ -77,7 +99,15 @@ let wakeLockSentinel = null;
 let wakeLockRequestPending = false;
 let nativeWakeLockActive = false;
 
-if (disableOrderGame()) persist();
+if (migrateLegacyOrderGame()) persist();
+
+function inferStartedState(value) {
+  return value.level > 1
+    || value.score > 0
+    || value.completed.length > 0
+    || value.skipped.length > 0
+    || Boolean(value.currentGame?.history?.length || value.currentGame?.wordState?.answer?.length);
+}
 
 function loadJson(key, fallback) {
   try {
@@ -85,6 +115,15 @@ function loadJson(key, fallback) {
     return { ...fallback, ...(value || {}) };
   } catch {
     return structuredClone(fallback);
+  }
+}
+
+function storedObjectHasOwn(key, field) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key));
+    return Boolean(value && Object.prototype.hasOwnProperty.call(value, field));
+  } catch {
+    return false;
   }
 }
 
@@ -126,6 +165,28 @@ function birdSvg(bird, decorative = false) {
   </svg>`;
 }
 
+function shipSvg(vessel, decorative = false) {
+  const upper = {
+    rowboat: `<path d="M36 48 64 33l28 15" fill="none" stroke="#8c5a35" stroke-width="5" stroke-linecap="round"/><path d="m35 36 67 34M104 36 42 70" stroke="#b97843" stroke-width="4" stroke-linecap="round"/>`,
+    sailboat: `<path d="M68 13v45" stroke="#76543c" stroke-width="4"/><path d="m65 17-31 34h31Z" fill="${vessel.accent}"/><path d="m72 25 25 26H72Z" fill="#e16f5c"/>`,
+    motorboat: `<path d="M49 48 60 31h35l13 17Z" fill="${vessel.accent}"/><rect x="68" y="35" width="20" height="10" rx="3" fill="#9ed5df"/><path d="M103 39h13" stroke="#e8b84f" stroke-width="4"/>`,
+    fishing: `<rect x="54" y="31" width="42" height="22" rx="5" fill="${vessel.accent}"/><rect x="62" y="35" width="22" height="9" rx="2" fill="#9bd3dc"/><path d="M96 20v33m0-28h16l-8 13" fill="none" stroke="#75553e" stroke-width="3"/>`,
+    yacht: `<path d="M45 49 58 31h45l13 18Z" fill="${vessel.accent}"/><path d="M64 34h31l8 12H57Z" fill="#eef8f4"/><path d="M70 37h20" stroke="#79b8cf" stroke-width="6"/>`,
+    ferry: `<rect x="39" y="26" width="70" height="29" rx="5" fill="${vessel.accent}"/><path d="M46 34h55M46 43h55" stroke="#76adc1" stroke-width="6" stroke-dasharray="8 5"/><rect x="63" y="18" width="25" height="10" rx="3" fill="#f8f3df"/>`,
+    cargo: `<rect x="39" y="35" width="21" height="17" fill="#e6a447"/><rect x="62" y="35" width="21" height="17" fill="#d96755"/><rect x="85" y="35" width="21" height="17" fill="#6aa58a"/><rect x="48" y="20" width="21" height="14" fill="#5c82aa"/><rect x="72" y="20" width="21" height="14" fill="#e4b14e"/>`,
+    cruise: `<path d="M38 49 48 22h62l8 27Z" fill="${vessel.accent}"/><path d="M50 29h54M47 38h62" stroke="#77abc2" stroke-width="5" stroke-dasharray="6 4"/><rect x="69" y="12" width="24" height="11" rx="3" fill="#f7f4e7"/>`,
+    liner: `<path d="M34 49 46 20h68l8 29Z" fill="${vessel.accent}"/><path d="M48 29h62M44 39h72" stroke="#82b4c8" stroke-width="5" stroke-dasharray="7 4"/><path d="M59 20v-9m20 9v-9m20 9v-9" stroke="#b95f4c" stroke-width="8"/>`,
+    transatlantic: `<path d="M28 50 43 17h76l12 33Z" fill="${vessel.accent}"/><path d="M45 25h69M41 36h79M38 45h86" stroke="#72a9c1" stroke-width="5" stroke-dasharray="7 4"/><path d="M59 17V6m24 11V5m24 12V7" stroke="#ca674e" stroke-width="9"/><path d="M31 54h98" stroke="#e9bd55" stroke-width="4"/>`
+  }[vessel.kind];
+  return `<svg viewBox="0 0 140 90" role="img" aria-hidden="${decorative ? "true" : "false"}" ${decorative ? "" : `aria-label="${vessel.name}"`}>
+    <ellipse cx="72" cy="78" rx="54" ry="6" fill="rgba(20,68,89,.16)"/>
+    ${upper}
+    <path d="M19 51h115c-5 15-17 24-35 27H50C35 72 25 63 19 51Z" fill="${vessel.color}"/>
+    <path d="M29 58h93" stroke="rgba(255,255,255,.58)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M11 80c13-6 23 6 36 0s23 6 36 0 23 6 43 0" fill="none" stroke="#78bed0" stroke-width="4" stroke-linecap="round"/>
+  </svg>`;
+}
+
 function birdById(id) { return species.find((bird) => bird.id === id); }
 
 function applyA11yClasses() {
@@ -145,7 +206,8 @@ function renderHome() {
   const day = gardenDay(save.level);
   const mode = stageForLevel(save.level);
   const meta = stageMeta(mode);
-  const dayStep = mode === "word" ? 1 : 0;
+  const route = ["logic", "fleet", "word"];
+  const dayStep = route.indexOf(mode);
   const gift = idleGift(save.village);
   const journeyCount = save.completed.length + save.skipped.length;
   app.innerHTML = `<main class="app-shell"><section class="screen home-screen" aria-labelledby="home-title">
@@ -155,22 +217,24 @@ function renderHome() {
       <div class="village-sky" aria-hidden="true"><span class="village-sun">☀</span><span class="village-cloud">☁</span></div>
       <button class="village-house house-main" data-action="village" aria-label="Kuş Konağı seviye ${save.village.buildings.konak}"><span>🏡</span><strong>${save.village.buildings.konak}</strong></button>
       <button class="village-house house-green" data-action="village" aria-label="Günışığı Serası seviye ${save.village.buildings.sera}"><span>🌿</span><strong>${save.village.buildings.sera}</strong></button>
-      <button class="village-house house-work" data-action="village" aria-label="Bahçe Atölyesi seviye ${save.village.buildings.atolye}"><span>🛠️</span><strong>${save.village.buildings.atolye}</strong></button>
+      <button class="village-house house-work" data-action="village" aria-label="Liman Atölyesi seviye ${save.village.buildings.atolye}"><span>⚓</span><strong>${save.village.buildings.atolye}</strong></button>
       <div class="village-path" aria-hidden="true"></div><div class="village-bird" aria-hidden="true">${birdSvg(hero, true)}</div>
-      <div class="village-copy"><div class="hero-kicker">✦ BAHÇE GÜNÜ ${day}</div><h2>${meta.greeting}<br><span>${meta.title}</span></h2><p>${meta.copy}</p><button class="primary-button" data-action="play">${canResumeGame() ? "Kaldığın yerden devam et" : `${meta.icon} ${meta.button}`}</button></div>
+      <div class="village-copy"><div class="hero-kicker">✦ BAHÇE GÜNÜ ${day}</div><h2>${meta.greeting}<br><span>${meta.title}</span></h2><p>${meta.copy}</p><button class="primary-button" data-action="play">${canResumeGame() ? "Kaldığın yerden devam et" : save.hasStarted ? `${meta.icon} ${meta.button}` : "▶ Oyuna başla"}</button></div>
     </article>
     ${gift ? `<button class="idle-gift" data-action="collect-gift"><span>🎁</span><div><strong>Kuşlar seni beklerken çalıştı</strong><small>${gift.hours} saatlik köy hediyesini topla</small></div><b>Topla</b></button>` : ""}
-    <section class="day-route" aria-label="Bahçe Günü ${day} bulmacaları"><div class="day-route-head"><div><span>Bugünün iki bulmacası</span><strong>${levelSubtitle(save.level)}</strong></div><em>${day}/400 gün</em></div><div class="route-steps">${["logic", "word"].map((id, index) => { const item = stageMeta(id); return `<div class="route-step ${index < dayStep ? "is-done" : index === dayStep ? "is-current" : ""}"><span>${index < dayStep ? "✓" : item.icon}</span><small>${item.short}</small></div>`; }).join("")}</div><div class="progress-track"><div class="progress-fill" style="width:${Math.max(1, (journeyCount / MAX_LEVEL) * 100)}%"></div></div></section>
-    <div class="quick-grid"><button class="quick-card" data-action="daily"><span class="mini-icon">☀️</span><strong>Günün görevi</strong><span>Her gün değişen özel bir köy bulmacası</span></button><button class="quick-card" data-action="album"><span class="mini-icon">🪶</span><strong>Kuş albümü</strong><span>${save.discovered.length} kuş keşfedildi</span></button></div>
+    <section class="day-route" aria-label="Bahçe Günü ${day} oyunları"><div class="day-route-head"><div><span>Bugünün üç oyunu</span><strong>${levelSubtitle(save.level)}</strong></div><em>${day}/400 gün</em></div><div class="route-steps">${route.map((id, index) => { const item = stageMeta(id); return `<div class="route-step ${index < dayStep ? "is-done" : index === dayStep ? "is-current" : ""}"><span>${index < dayStep ? "✓" : item.icon}</span><small>${item.short}</small></div>`; }).join("")}</div><div class="progress-track"><div class="progress-fill" style="width:${Math.max(1, (journeyCount / MAX_LEVEL) * 100)}%"></div></div></section>
+    <div class="quick-grid quick-grid-three"><button class="quick-card" data-action="daily"><span class="mini-icon">☀️</span><strong>Günün görevi</strong><span>Her gün değişen özel bir köy bulmacası</span></button><button class="quick-card" data-action="album"><span class="mini-icon">🪶</span><strong>Kuş albümü</strong><span>${save.discovered.length} kuş keşfedildi</span></button><button class="quick-card" data-action="fleet-album"><span class="mini-icon">⚓</span><strong>Filo defteri</strong><span>${save.fleetVoyage.discovered.length}/10 gemi keşfedildi</span></button></div>
   </section></main>`;
   bindCommonActions();
   applyA11yClasses();
 }
 
 function startGame(daily = false) {
-  if (disableOrderGame()) persist();
+  if (migrateLegacyOrderGame()) persist();
   if (!daily && canResumeGame()) game = save.currentGame;
   else game = createStage(save.level, daily);
+  save.hasStarted = true;
+  persist();
   void hideHomeBanner();
   void requestWakeLock();
   renderGame();
@@ -178,13 +242,13 @@ function startGame(daily = false) {
 
 function canResumeGame() {
   const saved = save.currentGame;
-  return saved?.version === 4
+  return save.hasStarted
+    && ((saved?.version === 4 && ["logic", "word"].includes(saved.mode)) || (saved?.version === 5 && saved.mode === "fleet"))
     && saved.status === "playing"
-    && saved.level === save.level
-    && saved.mode !== "order";
+    && saved.level === save.level;
 }
 
-function disableOrderGame() {
+function migrateLegacyOrderGame() {
   let changed = false;
   if (!save.skipOrders) {
     save.skipOrders = true;
@@ -194,21 +258,16 @@ function disableOrderGame() {
     save.currentGame = null;
     changed = true;
   }
-  if (stageForLevel(save.level) !== "order") return changed;
-  if (!save.completed.includes(save.level) && !save.skipped.includes(save.level)) save.skipped.push(save.level);
-  save.level = Math.min(MAX_LEVEL, save.level + 1);
-  save.currentGame = null;
-  return true;
+  return changed;
 }
 
 function createStage(level, daily = false) {
-  let mode = stageForLevel(level, daily);
-  let stageLevel = level;
-  if (mode === "order") {
-    mode = daily && new Date().getUTCDate() % 2 ? "logic" : "word";
-    if (!daily) stageLevel = Math.min(MAX_LEVEL, level + 1);
-  }
-  const stage = mode === "logic" ? makeLogicStage(stageLevel, daily) : makeWordStage(stageLevel, daily);
+  const mode = stageForLevel(level, daily);
+  const stage = mode === "logic"
+    ? makeLogicStage(level, daily)
+    : mode === "fleet"
+      ? makeFleetStage(level, daily, new Date(), save.fleetVoyage)
+      : makeWordStage(level, daily);
   stage.dateKey = new Date().toISOString().slice(0, 10);
   return stage;
 }
@@ -216,33 +275,45 @@ function createStage(level, daily = false) {
 function stageMeta(mode) {
   return {
     logic: { icon: "🧩", short: "Sabah", greeting: "Günaydın!", title: "Kuş Düzeni", button: "Kuşları yerleştir", copy: "Her satır ve sütunda kuşları dengeli biçimde yerleştir." },
+    fleet: { icon: "⚓", short: "Öğle", greeting: "Liman canlanıyor", title: "Büyük Filo", button: "Filoyu büyüt", copy: "Aynı gemileri birleştir; kayıktan transatlantiğe uzanan filonu kur." },
     word: { icon: "🔤", short: "Akşam", greeting: "Bahçe fısıldıyor", title: "Gizli Sözcük", button: "Sözcüğü bul", copy: "İpucunu çöz, karışık harfleri anlamlı bir sözcüğe dönüştür." }
   }[mode];
 }
 
 function saveGame() {
-  if (game && !game.daily && game.status === "playing") save.currentGame = game;
+  if (game && !game.daily && game.status === "playing") {
+    save.currentGame = game;
+    if (game.mode === "fleet") save.fleetVoyage = fleetVoyageFromGame(game);
+  }
   persist();
 }
 
 function renderGame() {
   if (game.mode === "word") return renderWordGame();
+  if (game.mode === "fleet") return renderFleetGame();
   const app = document.querySelector("#app");
   const conflicts = getConflicts(game.cells, game.size);
   const openCount = game.cells.filter((cell) => !cell.given).length;
   const filled = game.cells.filter((cell) => !cell.given && cell.speciesId).length;
   const progress = Math.round((filled / openCount) * 100);
   const inventory = inventoryFor(game);
+  const tutorial = currentLogicTutorial();
+  const hintAction = tutorial
+    ? `<button class="power-button" disabled>${icon("hint")}<span>Ders sonrası ipucu</span></button>`
+    : game.hints > 0
+    ? `<button class="power-button" data-action="hint">${icon("hint")}<span>İpucu (${game.hints})</span></button>`
+    : game.rewardedHintUsed
+      ? `<button class="power-button" disabled>${icon("hint")}<span>İpuçları bitti</span></button>`
+      : `<button class="power-button reward-hint-button" data-action="reward-hint">${icon("hint")}<span>30 sn reklam · +1</span></button>`;
   app.innerHTML = `<main class="app-shell"><section class="screen game-screen logic-screen" aria-labelledby="level-title">
     ${gameHeader("Sabah · Kuş düzeni")}
     <div class="progress-wrap" aria-label="Bölüm ilerlemesi yüzde ${progress}"><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><div class="progress-label">${filled}/${openCount}</div></div>
-    <aside class="mission-card ${missionComplete(game) ? "is-safe" : ""}"><span class="mission-medal">✦</span><div><strong>${game.mission.title}</strong><span>${game.mission.copy}</span></div></aside>
+    ${tutorial ? tutorialMarkup(tutorial) : game.activeHint ? hintCoachMarkup(game.activeHint) : `<aside class="mission-card ${missionComplete(game) ? "is-safe" : ""}"><span class="mission-medal">✦</span><div><strong>${game.mission.title}</strong><span>${game.mission.copy}</span></div></aside>`}
     <div class="logic-board-wrap">
       <div class="logic-board" style="--grid-size:${game.size}" role="grid" aria-label="Kuş yerleştirme bahçesi">${game.cells.map((cell) => cellMarkup(cell, conflicts)).join("")}</div>
-      ${!save.onboardingSeen && game.level === 1 ? '<div class="coach-bubble" role="status"><strong>Her satır ve sütunda her kuş yalnızca bir kez bulunmalı.</strong><br>Önce aşağıdan bir kuş seç, sonra boş bir yuvaya dokun.</div>' : ""}
     </div>
     <section class="flock-section" aria-labelledby="flock-title"><div class="tray-label"><span id="flock-title">Yerleştirilecek kuşlar</span><span>${conflicts.size ? `${conflicts.size} çakışma` : "Düzen temiz"}</span></div><div class="bird-palette">${game.speciesIds.map((id) => paletteMarkup(id, inventory[id])).join("")}</div></section>
-    <div class="power-row"><button class="power-button" data-action="undo" ${game.history.length ? "" : "disabled"}>${icon("undo")}<span>Geri al</span></button><button class="power-button" data-action="clear" ${conflicts.size && game.clears > 0 ? "" : "disabled"}>${icon("clear")}<span>Çakışmayı sil (${game.clears})</span></button><button class="power-button" data-action="hint" ${game.hints > 0 ? "" : "disabled"}>${icon("hint")}<span>İpucu (${game.hints})</span></button></div>
+    <div class="power-row"><button class="power-button" data-action="undo" ${game.history.length ? "" : "disabled"}>${icon("undo")}<span>Geri al</span></button><button class="power-button" data-action="clear" ${conflicts.size && game.clears > 0 ? "" : "disabled"}>${icon("clear")}<span>Çakışmayı sil (${game.clears})</span></button>${hintAction}</div>
   </section></main>`;
   bindGameActions();
   applyA11yClasses();
@@ -254,7 +325,9 @@ function gameHeader(phase) {
 
 function cellMarkup(cell, conflicts) {
   const bird = cell.speciesId ? birdById(cell.speciesId) : null;
-  const classes = ["logic-cell", cell.given ? "is-given" : "", conflicts.has(cell.index) ? "is-conflict" : "", bird ? "is-filled" : ""].filter(Boolean).join(" ");
+  const tutorial = currentLogicTutorial();
+  const guided = (tutorial && tutorial.step >= 1 && tutorial.targetIndex === cell.index) || game.activeHint?.targetIndex === cell.index;
+  const classes = ["logic-cell", cell.given ? "is-given" : "", conflicts.has(cell.index) ? "is-conflict" : "", bird ? "is-filled" : "", guided ? "is-guided" : ""].filter(Boolean).join(" ");
   const label = bird ? `${cell.row + 1}. satır ${cell.col + 1}. sütun, ${bird.name}${cell.given ? ", sabit kuş" : ", değiştirmek için dokun"}` : `${cell.row + 1}. satır ${cell.col + 1}. sütun, boş yuva`;
   return `<button class="${classes}" data-cell="${cell.index}" role="gridcell" aria-label="${label}" ${cell.given ? "disabled" : ""}>${bird ? birdSvg(bird, true) : '<span class="nest-mark" aria-hidden="true">⌄</span>'}${cell.given ? '<span class="given-pin" aria-hidden="true">●</span>' : ""}</button>`;
 }
@@ -262,7 +335,39 @@ function cellMarkup(cell, conflicts) {
 function paletteMarkup(id, count) {
   const bird = birdById(id);
   const selected = game.selectedSpeciesId === id;
-  return `<button class="palette-bird ${selected ? "is-selected" : ""}" data-species="${id}" ${count <= 0 ? "disabled" : ""} aria-pressed="${selected}" aria-label="${bird.name}, ${count} adet kaldı"><span>${birdSvg(bird, true)}</span><strong>${count}</strong></button>`;
+  const tutorial = currentLogicTutorial();
+  const guided = (tutorial && tutorial.step >= 1 && tutorial.speciesId === id) || game.activeHint?.speciesId === id;
+  return `<button class="palette-bird ${selected ? "is-selected" : ""} ${guided ? "is-guided" : ""}" data-species="${id}" ${count <= 0 ? "disabled" : ""} aria-pressed="${selected}" aria-label="${bird.name}, ${count} adet kaldı"><span>${birdSvg(bird, true)}</span><strong>${count}</strong></button>`;
+}
+
+function currentLogicTutorial() {
+  if (!game || game.mode !== "logic" || game.day > 2 || save.logicTutorialDays.includes(game.day)) return null;
+  const target = game.cells[game.tutorialTargetIndex];
+  if (!target) return null;
+  const bird = birdById(target.solutionId);
+  return {
+    day: game.day,
+    step: Number(game.tutorialStep || 0),
+    targetIndex: target.index,
+    speciesId: target.solutionId,
+    bird,
+    row: target.row + 1,
+    col: target.col + 1
+  };
+}
+
+function tutorialMarkup(tutorial) {
+  const lesson = tutorial.day === 1 ? "Ders 1/2" : "Ders 2/2";
+  const line = tutorial.day === 1 ? `${tutorial.row}. satıra` : `${tutorial.col}. sütuna`;
+  const rule = tutorial.day === 1 ? "İlk derste bir satırdaki eksik kuşu bulacağız." : "Şimdi aynı eleme yöntemini bir sütunda kullanacağız.";
+  if (tutorial.step === 0) return `<aside class="tutorial-card" role="status"><span class="tutorial-badge">${lesson}</span><div><strong>Her kuş, her satır ve sütunda yalnızca bir kez bulunur.</strong><span>${rule}</span></div><button data-tutorial="start">Birlikte yapalım</button></aside>`;
+  if (tutorial.step === 1) return `<aside class="tutorial-card" role="status"><span class="tutorial-badge">${lesson}</span><div><strong>${line} bak: eksik kuş ${tutorial.bird.name}.</strong><span>Bu çizgideki diğer kuşlar zaten kullanıldı. Aşağıda parlayan ${tutorial.bird.name} kuşunu seç.</span></div></aside>`;
+  if (tutorial.step === 2) return `<aside class="tutorial-card" role="status"><span class="tutorial-badge">${lesson}</span><div><strong>Şimdi parlayan yuvaya dokun.</strong><span>${tutorial.row}. satır, ${tutorial.col}. sütunda ${tutorial.bird.name} tekrara yol açmıyor.</span></div></aside>`;
+  return `<aside class="tutorial-card is-success" role="status"><span class="tutorial-badge">✓</span><div><strong>Harika! Kuşu neden oraya koyduğunu artık biliyorsun.</strong><span>Her boş yuvada satır ve sütundaki kuşları ele; geriye kalan doğru seçimdir.</span></div><button data-tutorial="finish">Kendim devam edeceğim</button></aside>`;
+}
+
+function hintCoachMarkup(hint) {
+  return `<aside class="hint-coach" role="status"><span>${icon("hint")}</span><div><strong>${hint.title}</strong><small>${hint.copy}</small></div></aside>`;
 }
 
 function bindCommonActions() {
@@ -270,6 +375,7 @@ function bindCommonActions() {
   document.querySelector('[data-action="play"]')?.addEventListener("click", () => startGame(false));
   document.querySelector('[data-action="daily"]')?.addEventListener("click", () => startGame(true));
   document.querySelector('[data-action="album"]')?.addEventListener("click", openAlbum);
+  document.querySelector('[data-action="fleet-album"]')?.addEventListener("click", openFleetAlbum);
   document.querySelectorAll('[data-action="village"]').forEach((button) => button.addEventListener("click", openVillage));
   document.querySelector('[data-action="collect-gift"]')?.addEventListener("click", collectGift);
 }
@@ -281,10 +387,23 @@ function bindGameActions() {
   document.querySelector('[data-action="undo"]')?.addEventListener("click", undoMove);
   document.querySelector('[data-action="clear"]')?.addEventListener("click", clearConflicts);
   document.querySelector('[data-action="hint"]')?.addEventListener("click", showHint);
+  document.querySelector('[data-action="reward-hint"]')?.addEventListener("click", openRewardedHintConfirmation);
+  document.querySelector('[data-tutorial="start"]')?.addEventListener("click", () => {
+    game.tutorialStep = 1;
+    renderGame();
+    saveGame();
+  });
+  document.querySelector('[data-tutorial="finish"]')?.addEventListener("click", finishLogicTutorial);
 }
 
 function selectSpecies(id) {
+  const tutorial = currentLogicTutorial();
+  if (tutorial && tutorial.step === 0) return showToast("Önce ‘Birlikte yapalım’ düğmesine dokun.");
+  if (tutorial && tutorial.step === 1 && id !== tutorial.speciesId) return showToast(`Bu derste ${tutorial.bird.name} kuşunu arıyoruz.`);
+  if (tutorial && tutorial.step === 2) return showToast("Şimdi parlayan yuvaya dokun.");
+  if (tutorial && tutorial.step === 3) return showToast("Önce öğretici kartını tamamla.");
   game.selectedSpeciesId = game.selectedSpeciesId === id ? null : id;
+  if (tutorial && tutorial.step === 1 && id === tutorial.speciesId) game.tutorialStep = 2;
   playTone(390, .05);
   haptic(12);
   renderGame();
@@ -299,6 +418,10 @@ async function placeBird(index) {
   if (game.busy || game.status !== "playing") return;
   const cell = game.cells[index];
   if (!cell || cell.given) return;
+  const tutorial = currentLogicTutorial();
+  if (tutorial && tutorial.step === 3) return showToast("Önce ‘Kendim devam edeceğim’ düğmesine dokun.");
+  if (tutorial && tutorial.step < 2) return showToast("Önce parlayan kuşu seç.");
+  if (tutorial && tutorial.step === 2 && index !== tutorial.targetIndex) return showToast("Bu derste parlayan yuvaya dokun.");
   if (!game.selectedSpeciesId && cell.speciesId) {
     rememberBoard();
     game.selectedSpeciesId = cell.speciesId;
@@ -323,7 +446,8 @@ async function placeBird(index) {
     showToast("Önce aşağıdan bir kuş seç.");
     return;
   }
-  if (!save.onboardingSeen) save.onboardingSeen = true;
+  game.activeHint = null;
+  if (tutorial && tutorial.step === 2 && index === tutorial.targetIndex && cell.speciesId === tutorial.speciesId) game.tutorialStep = 3;
   renderGame();
   saveGame();
   if (isGridSolved(game)) {
@@ -334,10 +458,26 @@ async function placeBird(index) {
   }
 }
 
+function finishLogicTutorial() {
+  const tutorial = currentLogicTutorial();
+  if (!tutorial || tutorial.step !== 3) return;
+  if (!save.logicTutorialDays.includes(tutorial.day)) save.logicTutorialDays.push(tutorial.day);
+  save.onboardingSeen = true;
+  game.selectedSpeciesId = null;
+  playSuccessSound();
+  renderGame();
+  saveGame();
+}
+
 function undoMove() {
   const previous = game.history.pop();
   if (!previous || game.busy) return;
   game.cells.forEach((cell, index) => { cell.speciesId = previous[index]; });
+  const tutorial = currentLogicTutorial();
+  if (tutorial?.step === 3) {
+    game.tutorialStep = 1;
+    game.selectedSpeciesId = null;
+  }
   game.undoCount += 1;
   playTone(280, .05);
   renderGame();
@@ -352,47 +492,171 @@ function clearConflicts() {
   game.clears -= 1;
   game.helpsUsed += 1;
   game.selectedSpeciesId = null;
+  game.activeHint = null;
   showToast("Çakışan kuşlar sürüye döndü.");
   renderGame();
   saveGame();
 }
 
 function showHint() {
+  if (currentLogicTutorial()) return showToast("Önce kısa dersi tamamla; üç ipucun korunacak.");
   if (game.hints <= 0 || game.busy) return;
-  const candidate = game.cells.find((cell) => !cell.given && cell.speciesId !== cell.solutionId);
-  if (!candidate) return;
-  rememberBoard();
-  const inventory = inventoryFor(game);
-  if (inventory[candidate.solutionId] <= 0) {
-    const donor = game.cells.find((cell) => !cell.given && cell.index !== candidate.index && cell.speciesId === candidate.solutionId && cell.speciesId !== cell.solutionId);
-    if (donor) donor.speciesId = null;
-  }
-  candidate.speciesId = candidate.solutionId;
+  const hint = logicHintFor(game);
+  if (!hint) return showToast("Bahçe zaten doğru görünüyor.");
   game.hints -= 1;
   game.helpsUsed += 1;
+  game.hintTrail = { targetIndex: hint.targetIndex, step: hint.step };
+  game.activeHint = hint;
   game.selectedSpeciesId = null;
   renderGame();
-  document.querySelector(`[data-cell="${candidate.index}"]`)?.classList.add("is-hint");
   playTone(650, .12);
   saveGame();
-  if (isGridSolved(game)) setTimeout(finishStage, settings.reduceMotion ? 20 : 700);
+}
+
+function openRewardedHintConfirmation() {
+  if (game.hints > 0 || game.rewardedHintUsed || game.busy) return;
+  const backdrop = document.createElement("div");
+  backdrop.className = "modal-backdrop";
+  backdrop.innerHTML = `<section class="modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="reward-hint-title"><div class="confirm-icon" aria-hidden="true">💡</div><h2 id="reward-hint-title">Bir ipucu daha ister misin?</h2><p>Yaklaşık 30 saniyelik ödüllü reklamı sonuna kadar izlersen bir ek düşünme ipucu kazanırsın.</p><div class="modal-actions"><button class="primary-button" data-watch-hint-ad>Reklamı izle · +1 ipucu</button><button class="secondary-button" data-cancel-hint-ad>Şimdi değil</button></div></section>`;
+  document.body.append(backdrop);
+  const close = () => backdrop.remove();
+  backdrop.querySelector("[data-cancel-hint-ad]").addEventListener("click", close);
+  backdrop.querySelector("[data-watch-hint-ad]").addEventListener("click", async () => {
+    const button = backdrop.querySelector("[data-watch-hint-ad]");
+    button.disabled = true;
+    button.textContent = "Reklam hazırlanıyor…";
+    const earned = await watchRewardedHintAd();
+    if (!earned) {
+      button.disabled = false;
+      button.textContent = "Tekrar dene · +1 ipucu";
+      showToast("Reklam şu anda hazır değil; ipucu hakkın harcanmadı.");
+      return;
+    }
+    game.hints = 1;
+    game.rewardedHintUsed = true;
+    close();
+    renderGame();
+    saveGame();
+    showToast("Bir ek ipucu kazandın.");
+  });
+  backdrop.querySelector("[data-watch-hint-ad]").focus();
+}
+
+function renderFleetGame() {
+  const app = document.querySelector("#app");
+  const progress = Math.min(100, Math.round((game.merges / game.targetMerges) * 100));
+  const best = vesselForRank(game.bestRank);
+  app.innerHTML = `<main class="app-shell"><section class="screen game-screen fleet-screen" aria-labelledby="level-title">
+    ${gameHeader("Öğle · Büyük Filo")}
+    <div class="progress-wrap" aria-label="Sefer ilerlemesi yüzde ${progress}"><div class="progress-track fleet-progress"><div class="progress-fill" style="width:${progress}%"></div></div><div class="progress-label">${game.merges}/${game.targetMerges}</div></div>
+    <aside class="fleet-mission"><div class="fleet-best">${shipSvg(best, true)}</div><div><span>Bugünün seferi</span><strong>${game.targetMerges} birleşme yap</strong><small>En büyük gemin: ${best.name} · Filo puanı ${game.totalScore}</small></div></aside>
+    <div class="fleet-board-wrap"><div class="fleet-board" role="grid" aria-label="Büyük Filo oyun alanı">${game.board.map((rank, index) => fleetTileMarkup(rank, index)).join("")}</div><p class="fleet-swipe-help">Alanı kaydır veya aşağıdaki yönlere dokun. Aynı gemiler birleşip büyür.</p></div>
+    <div class="fleet-directions" aria-label="Filo yönleri"><button data-fleet-direction="up" aria-label="Yukarı kaydır">↑</button><button data-fleet-direction="left" aria-label="Sola kaydır">←</button><button data-fleet-direction="down" aria-label="Aşağı kaydır">↓</button><button data-fleet-direction="right" aria-label="Sağa kaydır">→</button></div>
+    <div class="power-row fleet-actions"><button class="power-button" data-action="fleet-undo" ${game.history.length ? "" : "disabled"}>${icon("undo")}<span>Geri al</span></button><button class="power-button" data-action="fleet-album">⚓<span>Filo defteri</span></button></div>
+  </section></main>`;
+  document.querySelectorAll("[data-fleet-direction]").forEach((button) => button.addEventListener("click", () => moveFleet(button.dataset.fleetDirection)));
+  document.querySelector('[data-action="fleet-undo"]')?.addEventListener("click", () => {
+    if (!undoFleetMove(game)) return;
+    playTone(280, .05);
+    renderFleetGame();
+    saveGame();
+  });
+  document.querySelector('[data-action="fleet-album"]')?.addEventListener("click", openFleetAlbum);
+  document.querySelector('[data-action="home"]')?.addEventListener("click", () => { saveGame(); renderHome(); });
+  const board = document.querySelector(".fleet-board");
+  let startPoint = null;
+  board.addEventListener("pointerdown", (event) => {
+    startPoint = { x: event.clientX, y: event.clientY };
+    board.setPointerCapture?.(event.pointerId);
+  });
+  board.addEventListener("pointerup", (event) => {
+    if (!startPoint) return;
+    const dx = event.clientX - startPoint.x;
+    const dy = event.clientY - startPoint.y;
+    startPoint = null;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
+    moveFleet(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up"));
+  });
+  applyA11yClasses();
+}
+
+function fleetTileMarkup(rank, index) {
+  if (!rank) return `<div class="fleet-tile is-empty" role="gridcell" aria-label="Boş deniz karesi"></div>`;
+  const vessel = vesselForRank(rank);
+  return `<div class="fleet-tile fleet-rank-${rank}" role="gridcell" aria-label="${vessel.name}" style="--fleet-color:${vessel.color};--fleet-accent:${vessel.accent}"><span class="fleet-rank">${rank}</span>${shipSvg(vessel, true)}<strong>${vessel.short}</strong></div>`;
+}
+
+async function moveFleet(direction) {
+  if (game.busy || game.status !== "playing") return;
+  const previousBest = game.bestRank;
+  const result = applyFleetMove(game, direction);
+  if (!result.moved) {
+    playTone(190, .07);
+    haptic(18);
+    if (!hasFleetMoves(game.board)) openFleetRescue();
+    return;
+  }
+  playTone(result.merges ? 560 : 380, .06);
+  haptic(result.merges ? [12, 20, 12] : 10);
+  renderFleetGame();
+  saveGame();
+  if (game.bestRank > previousBest) {
+    const vessel = vesselForRank(game.bestRank);
+    showToast(`Yeni gemi keşfedildi: ${vessel.name}!`);
+    playSuccessSound();
+  }
+  if (fleetMissionComplete(game)) {
+    game.busy = true;
+    await wait(settings.reduceMotion ? 1 : 600);
+    finishStage();
+    return;
+  }
+  if (!hasFleetMoves(game.board)) openFleetRescue();
+}
+
+function openFleetRescue() {
+  if (document.querySelector("[data-fleet-rescue]")) return;
+  const backdrop = document.createElement("div");
+  backdrop.className = "modal-backdrop";
+  backdrop.innerHTML = `<section class="modal confirm-modal" data-fleet-rescue role="dialog" aria-modal="true" aria-labelledby="fleet-rescue-title"><div class="confirm-icon" aria-hidden="true">⚓</div><h2 id="fleet-rescue-title">Liman doldu</h2><p>Bu seferde hareket kalmadı. Keşfettiğin gemiler ve puanın korunacak; limanı yeniden düzenleyebilirsin.</p><div class="modal-actions"><button class="primary-button" data-reset-fleet>Limanda yeniden başla</button><button class="secondary-button" data-fleet-home>Şimdi ara ver</button></div></section>`;
+  document.body.append(backdrop);
+  backdrop.querySelector("[data-reset-fleet]").addEventListener("click", () => {
+    resetFleetBoard(game);
+    backdrop.remove();
+    renderFleetGame();
+    saveGame();
+  });
+  backdrop.querySelector("[data-fleet-home]").addEventListener("click", () => {
+    backdrop.remove();
+    saveGame();
+    renderHome();
+  });
+  backdrop.querySelector("[data-reset-fleet]").focus();
 }
 
 function renderWordGame() {
   const app = document.querySelector("#app");
   const word = game.wordState;
+  if (!Number.isInteger(game.hints)) game.hints = 3;
+  if (!Number.isInteger(game.hintStep)) game.hintStep = 0;
   const progress = Math.round((word.answer.length / word.word.length) * 100);
+  const hintAction = game.hints > 0
+    ? `<button class="power-button" data-action="word-hint">${icon("hint")}<span>İpucu (${game.hints})</span></button>`
+    : game.rewardedHintUsed
+      ? `<button class="power-button" disabled>${icon("hint")}<span>İpuçları bitti</span></button>`
+      : `<button class="power-button reward-hint-button" data-action="reward-hint">${icon("hint")}<span>30 sn reklam · +1</span></button>`;
   app.innerHTML = `<main class="app-shell"><section class="screen game-screen word-screen" aria-labelledby="level-title">
     ${gameHeader("Akşam · Gizli sözcük")}
     <div class="progress-wrap"><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><div class="progress-label">${word.answer.length}/${word.word.length}</div></div>
     <article class="word-stage"><div class="word-kicker">Bahçe konuşuyor</div><h2>Gizli sözcüğü bul</h2><p class="word-clue">“${word.clue}”</p><div class="answer-slots" aria-label="Verilen cevap">${Array.from({ length: word.word.length }, (_, index) => `<span class="answer-slot ${word.answer[index] !== undefined ? "is-filled" : ""}">${word.answer[index] !== undefined ? word.letters[word.answer[index]].letter : ""}</span>`).join("")}</div><div class="letter-wheel" aria-label="Harfler">${word.letters.map((item, index) => `<button class="letter-button ${item.used ? "is-used" : ""}" data-letter="${index}" ${item.used ? "disabled" : ""} aria-label="${item.letter} harfi">${item.letter}</button>`).join("")}</div><p class="word-help">Harfleri doğru sırayla seç. Yanlış denemen puanını düşürmez.</p></article>
-    ${!save.wordOnboardingSeen ? '<div class="word-coach" role="status">İpucunu oku ve harflere sırayla dokun. Bu bölümde süre sınırı yok.</div>' : ""}
-    <div class="power-row word-actions"><button class="power-button" data-action="word-back" ${word.answer.length ? "" : "disabled"}>${icon("undo")}<span>Son harfi sil</span></button><button class="power-button" data-action="word-clear" ${word.answer.length ? "" : "disabled"}>${icon("clear")}<span>Temizle</span></button><button class="power-button" data-action="word-hint">${icon("hint")}<span>Harf ipucu</span></button></div>
+    ${game.activeHint ? `<div class="word-coach word-hint-coach" role="status"><strong>${game.activeHint.title}</strong><span>${game.activeHint.copy}</span></div>` : !save.wordOnboardingSeen ? '<div class="word-coach" role="status">İpucunu oku ve harflere sırayla dokun. “Geri al” ile son harfi istediğin zaman kaldırabilirsin.</div>' : ""}
+    <div class="power-row word-actions"><button class="power-button" data-action="word-back" ${word.answer.length ? "" : "disabled"}>${icon("undo")}<span>Geri al</span></button><button class="power-button" data-action="word-clear" ${word.answer.length ? "" : "disabled"}>${icon("clear")}<span>Temizle</span></button>${hintAction}</div>
   </section></main>`;
   document.querySelectorAll("[data-letter]").forEach((button) => button.addEventListener("click", () => chooseLetter(Number(button.dataset.letter))));
   document.querySelector('[data-action="word-back"]')?.addEventListener("click", removeLastLetter);
   document.querySelector('[data-action="word-clear"]')?.addEventListener("click", clearWord);
   document.querySelector('[data-action="word-hint"]')?.addEventListener("click", wordHint);
+  document.querySelector('[data-action="reward-hint"]')?.addEventListener("click", openRewardedHintConfirmation);
   document.querySelector('[data-action="home"]')?.addEventListener("click", () => { saveGame(); renderHome(); });
   applyA11yClasses();
 }
@@ -445,21 +709,34 @@ function clearWord() {
 
 function wordHint() {
   const word = game.wordState;
-  const current = word.answer.map((index) => word.letters[index].letter).join("");
-  if (!word.word.startsWith(current)) clearWord();
-  const wanted = word.word[word.answer.length];
-  const index = word.letters.findIndex((letter) => !letter.used && letter.letter === wanted);
-  if (index < 0) return;
+  if (game.hints <= 0 || game.busy) return;
+  const step = Math.min(3, game.hintStep || 0);
+  const vowels = [...new Set([...word.word].filter((letter) => "AEIİOÖUÜ".includes(letter)))];
+  const hints = [
+    { title: "Başlangıcı düşün", copy: `Aradığın sözcük ${word.word[0]} harfiyle başlıyor.` },
+    { title: "Sonunu yakala", copy: `Sözcüğün son harfi ${word.word.at(-1)}.` },
+    { title: "Sesini dinle", copy: vowels.length ? `Sözcükte ${vowels.join(", ")} sesli harfleri bulunuyor.` : "Bu sözcükte sesli harf bulunmuyor." },
+    { title: "Ek düşünme ipucu", copy: `İlk iki harf ${word.word.slice(0, 2)}. Harfleri kutulara yine sen yerleştir.` }
+  ];
   word.hintUsed = true;
   game.helpsUsed += 1;
-  showToast(`Sıradaki harf: ${wanted}`);
-  chooseLetter(index);
+  game.hints -= 1;
+  game.hintStep = step + 1;
+  game.activeHint = hints[step];
+  playTone(650, .12);
+  renderWordGame();
+  saveGame();
 }
 
 function finishStage() {
   game.status = "won";
   game.busy = false;
-  const careful = game.mode === "logic" ? missionComplete(game) : game.wordState.attempts <= 1;
+  if (game.mode === "fleet") save.fleetVoyage = fleetVoyageFromGame(game);
+  const careful = game.mode === "logic"
+    ? missionComplete(game)
+    : game.mode === "fleet"
+      ? game.undoCount <= 1
+      : game.wordState.attempts <= 1;
   const mastery = game.helpsUsed === 0;
   game.earnedStars = 1 + (careful ? 1 : 0) + (mastery ? 1 : 0);
   game.completedDay = !game.daily && game.level % 3 === 0;
@@ -477,7 +754,7 @@ function finishStage() {
     if (game.mode === "logic") for (const id of game.speciesIds) if (!save.discovered.includes(id)) save.discovered.push(id);
     save.level = Math.min(MAX_LEVEL, save.level + 1);
     save.currentGame = null;
-    disableOrderGame();
+    migrateLegacyOrderGame();
   }
   persist();
   openResult();
@@ -489,13 +766,16 @@ function openResult() {
   const bird = species[(game.level + 1) % species.length];
   const result = game.mode === "logic"
     ? { kicker: "Kuş düzeni tamamlandı", title: "Bahçe dengelendi!", copy: "Her kuş doğru yerini buldu. Köyün yeni yapıları için sağlam dallar kazandın." }
-    : { kicker: `${game.wordState.word} bulundu`, title: "Bahçe konuştu!", copy: "Gizli sözcüğü çözdün ve Çınar Kütüphanesi için berrak damlalar kazandın." };
+    : game.mode === "fleet"
+      ? { kicker: `${game.merges} başarılı birleşme`, title: "Filo büyüdü!", copy: `${vesselForRank(game.bestRank).name} limana öncülük ediyor. Yolculuğun bir sonraki seferde aynı filoyla sürecek.` }
+      : { kicker: `${game.wordState.word} bulundu`, title: "Bahçe konuştu!", copy: "Gizli sözcüğü çözdün ve Çınar Kütüphanesi için berrak damlalar kazandın." };
   const nextMeta = !game.daily && game.level < MAX_LEVEL ? stageMeta(stageForLevel(save.level)) : null;
   const rewardLine = Object.entries(game.reward).filter(([, amount]) => amount > 0).map(([id, amount]) => `${{ dal: "🪵", tohum: "🌾", damla: "💧" }[id]} +${amount}`).join("  ");
   const returnsHome = game.daily || game.level === MAX_LEVEL || game.completedDay;
   const autoCopy = returnsHome ? "Kuş Köyüne otomatik dönülüyor" : `${nextMeta.short} aşaması otomatik açılıyor`;
   backdrop.className = `modal-backdrop ${settings.reduceMotion ? "reduce-motion" : ""}`;
-  backdrop.innerHTML = `<section class="modal result-copy" role="dialog" aria-modal="true" aria-labelledby="result-title"><div class="result-illustration">${birdSvg(bird, true)}</div><div class="stars">${"★ ".repeat(game.earnedStars)}${"· ".repeat(3 - game.earnedStars)}</div><p class="eyebrow">${result.kicker}</p><h2 id="result-title">${result.title}</h2><p>${result.copy}</p>${game.completedDay ? '<div class="day-complete-ribbon">☀ Bahçe Günü tamamlandı</div>' : ""}<div class="result-breakdown"><span>Köy ödülü</span><strong>${rewardLine || "Bugün alındı"}</strong><span>Yaprak puanı</span><strong>+${game.reward && rewardLine ? 35 + game.earnedStars * 15 : 0}</strong></div><div class="auto-continue" role="status"><strong>${autoCopy} · <b data-auto-seconds>4</b></strong><div class="auto-track" aria-hidden="true"><i></i></div></div><div class="modal-actions"><button class="primary-button" data-result="primary">${returnsHome ? "Hemen Kuş Köyüne dön" : `${nextMeta.icon} Hemen ${nextMeta.button.toLocaleLowerCase("tr-TR")}`}</button><button class="secondary-button" data-result="home">Şimdi ara ver</button></div></section>`;
+  const resultIllustration = game.mode === "fleet" ? shipSvg(vesselForRank(game.bestRank), true) : birdSvg(bird, true);
+  backdrop.innerHTML = `<section class="modal result-copy" role="dialog" aria-modal="true" aria-labelledby="result-title"><div class="result-illustration ${game.mode === "fleet" ? "is-ship" : ""}">${resultIllustration}</div><div class="stars">${"★ ".repeat(game.earnedStars)}${"· ".repeat(3 - game.earnedStars)}</div><p class="eyebrow">${result.kicker}</p><h2 id="result-title">${result.title}</h2><p>${result.copy}</p>${game.completedDay ? '<div class="day-complete-ribbon">☀ Bahçe Günü tamamlandı</div>' : ""}<div class="result-breakdown"><span>Köy ödülü</span><strong>${rewardLine || "Bugün alındı"}</strong><span>Yaprak puanı</span><strong>+${game.reward && rewardLine ? 35 + game.earnedStars * 15 : 0}</strong></div><div class="auto-continue" role="status"><strong>${autoCopy} · <b data-auto-seconds>4</b></strong><div class="auto-track" aria-hidden="true"><i></i></div></div><div class="modal-actions"><button class="primary-button" data-result="primary">${returnsHome ? "Hemen Kuş Köyüne dön" : `${nextMeta.icon} Hemen ${nextMeta.button.toLocaleLowerCase("tr-TR")}`}</button><button class="secondary-button" data-result="home">Şimdi ara ver</button></div></section>`;
   document.body.append(backdrop);
   const continueJourney = () => {
     clearResultTimers();
@@ -648,12 +928,16 @@ function openBackupConfirmation(backup) {
   const close = () => { backdrop.remove(); void showHomeBanner(); };
   backdrop.querySelector("[data-cancel-backup]").addEventListener("click", close);
   backdrop.querySelector("[data-confirm-backup]").addEventListener("click", () => {
+    const importedHasStartedFlag = Object.prototype.hasOwnProperty.call(backup.save, "hasStarted");
     save = { ...structuredClone(defaultSave), ...backup.save };
     save.village = normalizeVillage(save.village);
     save.skipped = Array.isArray(save.skipped) ? save.skipped : [];
+    save.logicTutorialDays = Array.isArray(save.logicTutorialDays) ? save.logicTutorialDays : [];
+    save.fleetVoyage = normalizeFleetVoyage(save.fleetVoyage);
+    if (!importedHasStartedFlag) save.hasStarted = inferStartedState(save);
     settings = { ...defaultSettings, ...backup.settings };
     game = null;
-    disableOrderGame();
+    migrateLegacyOrderGame();
     persist();
     close();
     renderHome();
@@ -669,6 +953,22 @@ function openAlbum() {
   backdrop.innerHTML = `<section class="modal album-modal" role="dialog" aria-modal="true" aria-labelledby="album-title"><div class="modal-head"><div><p class="eyebrow">Keşif defteri</p><h2 id="album-title">Kuş albümü</h2></div><button class="icon-button" data-close aria-label="Albümü kapat">${icon("close")}</button></div><p>${save.discovered.length} kuşu yakından tanıdın. Yeni türler ilerleyen bahçelerde ortaya çıkacak.</p><div class="album-grid">${species.map((bird) => { const discovered = save.discovered.includes(bird.id); return `<article class="album-bird ${discovered ? "" : "is-locked"}" aria-label="${discovered ? bird.name : "Henüz keşfedilmemiş kuş"}"><div>${birdSvg(bird, true)}</div><strong>${discovered ? bird.name : "Yeni keşif"}</strong></article>`; }).join("")}</div></section>`;
   document.body.append(backdrop);
   const close = () => { backdrop.remove(); void showHomeBanner(); };
+  backdrop.querySelector("[data-close]").addEventListener("click", close);
+  backdrop.addEventListener("click", (event) => { if (event.target === backdrop) close(); });
+  backdrop.querySelector("button")?.focus();
+}
+
+function openFleetAlbum() {
+  void hideHomeBanner();
+  const discovered = new Set(game?.mode === "fleet" ? game.discovered : save.fleetVoyage.discovered);
+  const backdrop = document.createElement("div");
+  backdrop.className = "modal-backdrop";
+  backdrop.innerHTML = `<section class="modal fleet-album-modal" role="dialog" aria-modal="true" aria-labelledby="fleet-album-title"><div class="modal-head"><div><p class="eyebrow">Sandaldan transatlantiğe</p><h2 id="fleet-album-title">Filo defteri</h2></div><button class="icon-button" data-close aria-label="Filo defterini kapat">${icon("close")}</button></div><p>${discovered.size}/10 gemi keşfedildi. Aynı gemileri birleştirdikçe daha büyük bir gemi limana katılır.</p><div class="fleet-album-grid">${fleetVessels.map((vessel) => `<article class="fleet-album-item ${discovered.has(vessel.rank) ? "is-found" : "is-locked"}"><div>${discovered.has(vessel.rank) ? shipSvg(vessel, true) : "?"}</div><strong>${discovered.has(vessel.rank) ? vessel.name : "Henüz keşfedilmedi"}</strong><span>${vessel.rank}. kademe</span></article>`).join("")}</div></section>`;
+  document.body.append(backdrop);
+  const close = () => {
+    backdrop.remove();
+    if (!game) void showHomeBanner();
+  };
   backdrop.querySelector("[data-close]").addEventListener("click", close);
   backdrop.addEventListener("click", (event) => { if (event.target === backdrop) close(); });
   backdrop.querySelector("button")?.focus();
@@ -757,12 +1057,19 @@ document.addEventListener("visibilitychange", () => {
   else void releaseWakeLock();
 });
 document.addEventListener("pointerdown", () => { if (game) void requestWakeLock(); }, { passive: true });
+document.addEventListener("keydown", (event) => {
+  if (game?.mode !== "fleet" || document.querySelector(".modal-backdrop")) return;
+  const direction = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" }[event.key];
+  if (!direction) return;
+  event.preventDefault();
+  void moveFleet(direction);
+});
 window.addEventListener("pagehide", () => { saveGame(); void releaseWakeLock(); void hideHomeBanner(); });
 if ("serviceWorker" in navigator && import.meta.env.PROD && !import.meta.env.VITE_NATIVE_BUILD) window.addEventListener("load", () => navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL }).catch(() => {}));
 void registerNativeBackHandler(async () => {
   const modal = [...document.querySelectorAll(".modal-backdrop")].at(-1);
   if (modal) {
-    const closeButton = modal.querySelector("[data-close], [data-cancel-backup], [data-result='home']");
+    const closeButton = modal.querySelector("[data-close], [data-cancel-backup], [data-result='home'], [data-cancel-hint-ad], [data-fleet-home]");
     if (closeButton) closeButton.click();
     else {
       clearResultTimers();

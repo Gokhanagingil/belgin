@@ -1,7 +1,7 @@
 {
   "name": "Kuş Köyü",
   "short_name": "Kuş Köyü",
-  "description": "Kuşları düzenle, gizli sözcükleri çöz ve köyünü büyüt.",
+  "description": "Kuşları düzenle, gemileri birleştir, gizli sözcükleri çöz ve köyünü büyüt.",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#ecf7ec",
