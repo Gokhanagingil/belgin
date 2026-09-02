@@ -1,7 +1,7 @@
 export const villageBuildings = [
   { id: "konak", name: "Kuş Konağı", icon: "🏡", copy: "Köyün kalbi; mantık ödüllerini ve dönüş hediyelerini güçlendirir.", accent: "#d88755" },
   { id: "sera", name: "Günışığı Serası", icon: "🌿", copy: "Köyün tohumlarını ve dönüş hediyelerini bereketlendirir.", accent: "#6c9d5c" },
-  { id: "atolye", name: "Bahçe Atölyesi", icon: "🛠️", copy: "Kuşların dönüş hediyelerine katkı sağlar; yeni oyuna hazırlanıyor.", accent: "#aa744b" },
+  { id: "atolye", name: "Liman Atölyesi", icon: "⚓", copy: "Büyük Filo seferlerinden kazanılan tohumları güçlendirir.", accent: "#4e8295" },
   { id: "kutuphane", name: "Çınar Kütüphanesi", icon: "📚", copy: "Sözcüklerden daha fazla damla kazandırır.", accent: "#7586a9" }
 ];
 
@@ -54,7 +54,7 @@ export function upgradeBuilding(village, buildingId) {
 export function stageReward(mode, village, completesDay = false) {
   const reward = { dal: 1, tohum: 1, damla: 1 };
   if (mode === "logic") reward.dal += 3 + village.buildings.konak - 1;
-  if (mode === "order") reward.tohum += 3 + village.buildings.sera + village.buildings.atolye - 2;
+  if (mode === "order" || mode === "fleet") reward.tohum += 3 + village.buildings.sera + village.buildings.atolye - 2;
   if (mode === "word") reward.damla += 3 + village.buildings.kutuphane - 1;
   if (completesDay) {
     reward.dal += 2;

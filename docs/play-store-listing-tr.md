@@ -6,26 +6,29 @@
 - Paket kimliği: `com.gokhanagingil.kuskoyu`
 - Kategori: Oyunlar → Bulmaca
 - Hedef kitle: Yetişkinler; özellikle 60 yaş ve üzeri oyuncular
-- Reklam içerir: Evet, yalnızca ana ekranda küçük uyarlanabilir banner
+- Reklam içerir: Evet; ana ekranda küçük uyarlanabilir banner ve oyuncunun isteğiyle açılan ödüllü ipucu reklamı
 - Gizlilik politikası: `https://gokhanagingil.github.io/belgin/privacy.html`
 
 ## Kısa açıklama
 
-Kuşları düzenle, sözcükleri çöz, sakin köyünü gün gün büyüt.
+Kuşları düzenle, filonu büyüt, sözcükleri çöz; sakin köyünü gün gün geliştir.
 
 ## Tam açıklama
 
-Kuş Köyü, acele ettirmeyen iki farklı zihin oyununu yaşayan bir köy yolculuğunda buluşturur.
+Kuş Köyü, acele ettirmeyen üç farklı zihin oyununu yaşayan bir köy yolculuğunda buluşturur.
 
-Sabah Kuş Düzeni’nde her kuşu satır ve sütunlara dikkatle yerleştir. Akşam Gizli Sözcük’te ipucunu düşün, karışık harfleri doğru sıraya getir. Her başarı köyüne yeni kaynaklar kazandırır; kuş albümün ve yapılarının gelişimi kalıcı olarak saklanır.
+Sabah Kuş Düzeni’nde her kuşu satır ve sütunlara dikkatle yerleştir. Öğlen Büyük Filo’da aynı tekneleri birleştirerek sandaldan transatlantiğe uzanan filonu kur. Akşam Gizli Sözcük’te ipucunu düşün, karışık harfleri doğru sıraya getir. Her başarı köyüne yeni kaynaklar kazandırır; kuş albümün, filo defterin ve yapılarının gelişimi kalıcı olarak saklanır.
 
 **Sakin ama düşündüren oyun**
 
 - Süre sınırı, can kaybı ve cezalandırıcı yanlış hamle yoktur.
-- 400 Bahçe Günü ve 800 etkin bulmaca bulunur.
+- 400 Bahçe Günü ve 1.200 etkin oyun aşaması bulunur.
 - Bir yıllık yolculuk boyunca 400 farklı sözcükle karşılaşılır.
 - Zorluk 4×4 düzenlerden 6×6 düzenlere yavaşça yükselir.
 - Tamamlanan her oyun bir sonraki aşamaya otomatik geçer.
+- İlk Kuş Düzeni bölümleri, doğru hamlenin nedenini açıklayan etkileşimli öğreticiyle başlar.
+- İpuçları cevabı otomatik yerleştirmez; düşünme yönünü kademeli olarak daraltır.
+- Üç ücretsiz ipucundan sonra yalnızca oyuncu isterse ödüllü reklamla bir ek ipucu alınabilir.
 
 **Rahat kullanım**
 
@@ -60,5 +63,5 @@ Bu bölüm, gerçek AdMob hesabı ve nihai SDK raporu görüldükten sonra Play 
 
 - 512×512 yüksek çözünürlüklü uygulama ikonu
 - 1024×500 özellik görseli
-- En az 4 telefon ekran görüntüsü: Köy, Kuş Düzeni, Gizli Sözcük, erişilebilirlik/kayıt aktarımı
+- En az 5 telefon ekran görüntüsü: Köy, Kuş Düzeni öğreticisi, Büyük Filo, Gizli Sözcük, erişilebilirlik/kayıt aktarımı
 - Gerekirse 7 ve 10 inç tablet ekran görüntüleri

@@ -1,6 +1,6 @@
 # Kuş Köyü
 
-60+ yaş grubunda rahat, merak uyandıran ve uzun süreli kullanım gözetilerek tasarlanmış; mantık ve Türkçe kelime oyunlarını kalıcı bir köy yolculuğunda birleştiren mobil öncelikli oyun.
+60+ yaş grubunda rahat, merak uyandıran ve uzun süreli kullanım gözetilerek tasarlanmış; mantık, Türkçe kelime ve görsel birleştirme oyunlarını kalıcı bir köy yolculuğunda birleştiren mobil öncelikli oyun.
 
 ## Oyna
 
@@ -8,32 +8,37 @@
 
 ## Oyun döngüsü
 
-Her Bahçe Günü iki farklı zihinsel aşama sunar:
+Her Bahçe Günü üç farklı zihinsel aşama sunar:
 
 1. **Sabah · Kuş Düzeni:** Her kuş türünü her satır ve sütunda yalnızca bir kez kullanarak bahçeyi tamamla.
-2. **Akşam · Gizli Sözcük:** İpucunu oku ve karışık harfleri doğru sıraya koy.
+2. **Öğle · Büyük Filo:** Aynı gemileri birleştir; minik kayıktan transatlantiğe uzanan kalıcı filonu büyüt.
+3. **Akşam · Gizli Sözcük:** İpucunu oku ve karışık harfleri doğru sıraya koy.
 
-Atölye Siparişleri oyuncu akışında kapalıdır. Eski kayıt sipariş aşamasındaysa ilerleme kaybetmeden otomatik olarak Gizli Sözcük bölümüne geçirilir. Atölye daha sonra yeni bir oyun mekaniğiyle, bağımsız bir oyun olarak yeniden tasarlanacaktır.
+Atölye Siparişleri oyuncu akışında kapalıdır. Eski sipariş kayıtları temizlenir ve aynı bölüm numarası yeni Büyük Filo oyunuyla açılır.
 
 Yanlış hamleler can ya da puan kaybettirmez. Süre sınırı yoktur; oyuncu deneyebilir, geri alabilir ve gerektiğinde yardım kullanabilir. Her aşama köyü geliştiren kaynaklar kazandırır; yıldızlar dikkatli ve yardımsız oyun için ek ustalık hedefi sunar.
 
 ## Uzun soluklu yapı
 
-- 12 ayrı bölgeye yayılan 400 Bahçe Günü ve toplam 800 aktif bulmaca
+- 12 ayrı bölgeye yayılan 400 Bahçe Günü ve toplam 1.200 aktif oyun aşaması
 - 4×4'ten 6×6'ya ilerleyen mantık zorluğu
 - 469 özgün Türkçe sözcük ve ipucu; 400 günlük ana yolculukta tekrar yok
 - Dört kalıcı köy binası, kaynak ekonomisi ve sekiz saate kadar biriken dönüş hediyesi
 - Dönüşümlü aşama görevleri ve üç yıldız ustalık sistemi
 - Tarihe bağlı günlük özel görev
-- Otomatik kayıt; iki oyun türünün de ortasından devam
+- Otomatik kayıt; üç oyun türünün de ortasından devam
 - 12 kuşluk keşif albümü
+- 10 kademeli, kalıcı Filo Defteri ve kayıktan transatlantiğe gemi yolculuğu
 
 ## UX ve erişilebilirlik
 
 - Telefon, tablet ve yatay ekran düzenleri
 - Büyük dokunma hedefleri ve renk dışında biçimle de ayırt edilen kuşlar
 - Çakışmaları açıklayan anlık, cezalandırmayan geri bildirim
-- Geri alma, çakışmaları temizleme ve doğru yer ipucu
+- İlk iki Kuş Düzeni bölümünde neden-sonuç anlatan etkileşimli öğretici
+- Her iki bulmacada çözümü otomatik yerleştirmeyen, kademeli düşünme ipuçları
+- Üç ücretsiz ipucundan sonra isteğe bağlı ödüllü reklamla bir ek ipucu
+- Kelime oyununda daima görünür geri alma
 - Her başarıdan sonra kısa kutlamayla otomatik sonraki aşamaya geçiş
 - Aktif oyun sırasında varsayılan açık ekran koruması; ana ekranda otomatik bırakma
 - Ses, titreşim, büyük yazı, yüksek kontrast ve hareket azaltma ayarları

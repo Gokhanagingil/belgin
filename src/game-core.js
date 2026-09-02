@@ -109,8 +109,8 @@ export function gardenDay(level) {
 }
 
 export function stageForLevel(level, daily = false, date = new Date()) {
-  if (daily) return ["logic", "order", "word"][dailySeed(date) % 3];
-  return ["logic", "order", "word"][(level - 1) % 3];
+  if (daily) return ["logic", "fleet", "word"][dailySeed(date) % 3];
+  return ["logic", "fleet", "word"][(level - 1) % 3];
 }
 
 export function puzzleSize(level) {
@@ -142,6 +142,80 @@ export function inventoryFor(game) {
   const counts = Object.fromEntries(game.speciesIds.map((id) => [id, game.size]));
   for (const cell of game.cells) if (cell.speciesId) counts[cell.speciesId] -= 1;
   return counts;
+}
+
+export function candidatesForCell(game, cellIndex) {
+  const cell = game.cells[cellIndex];
+  if (!cell || cell.given) return [];
+  const blocked = new Set();
+  for (const item of game.cells) {
+    if (item.index === cellIndex || !item.speciesId) continue;
+    if (item.row === cell.row || item.col === cell.col) blocked.add(item.speciesId);
+  }
+  return game.speciesIds.filter((id) => !blocked.has(id));
+}
+
+export function logicHintFor(game) {
+  const conflicts = getConflicts(game.cells, game.size);
+  const previousTarget = Number(game.hintTrail?.targetIndex);
+  const previousCell = Number.isInteger(previousTarget) ? game.cells[previousTarget] : null;
+  const conflictTarget = previousCell && conflicts.has(previousTarget)
+    ? previousCell
+    : game.cells.find((cell) => !cell.given && conflicts.has(cell.index));
+  if (conflictTarget) {
+    const sameBird = species.find((item) => item.id === conflictTarget.speciesId);
+    const step = conflictTarget.index === previousTarget ? Math.min(2, Number(game.hintTrail?.step || 0) + 1) : 0;
+    const rowMatch = game.cells.some((cell) => cell.index !== conflictTarget.index && cell.row === conflictTarget.row && cell.speciesId === conflictTarget.speciesId);
+    const line = rowMatch ? `${conflictTarget.row + 1}. satırda` : `${conflictTarget.col + 1}. sütunda`;
+    const location = `${conflictTarget.row + 1}. satırdaki ${conflictTarget.col + 1}. yuva`;
+    if (step === 0) return { targetIndex: conflictTarget.index, step, speciesId: null, title: "Tekrarı fark et", copy: `${location} parlıyor. Bu yuvadaki kuş aynı satırda veya sütunda bir kez daha bulunuyor.` };
+    if (step === 1) return { targetIndex: conflictTarget.index, step, speciesId: null, title: "Çakışmayı karşılaştır", copy: `${sameBird?.name || "Bu kuş"} ${line} tekrar ediyor. Parlayan yuvayı ve diğer ${sameBird?.name || "kuşu"} yan yana düşün.` };
+    return { targetIndex: conflictTarget.index, step, speciesId: null, title: "Bir adım geri düşün", copy: `Parlayan yuvadaki ${sameBird?.name || "kuşu"} geri alıp satır ve sütunda eksik kalan türü dene.` };
+  }
+  const stillUseful = previousCell && !previousCell.given && !previousCell.speciesId;
+  const candidates = game.cells
+    .filter((cell) => !cell.given && !cell.speciesId)
+    .map((cell) => ({ cell, choices: candidatesForCell(game, cell.index) }))
+    .sort((a, b) => a.choices.length - b.choices.length);
+  const target = stillUseful
+    ? candidates.find((item) => item.cell.index === previousTarget)
+    : candidates[0];
+  if (!target) return null;
+  const step = stillUseful ? Math.min(2, Number(game.hintTrail?.step || 0) + 1) : 0;
+  const bird = species.find((item) => item.id === target.cell.solutionId);
+  const names = target.choices.map((id) => species.find((item) => item.id === id)?.name).filter(Boolean);
+  const location = `${target.cell.row + 1}. satırdaki ${target.cell.col + 1}. yuva`;
+  if (!target.choices.length) {
+    const editableBlocker = game.cells.find((cell) => !cell.given && cell.speciesId && (cell.row === target.cell.row || cell.col === target.cell.col));
+    const blockerBird = editableBlocker ? species.find((item) => item.id === editableBlocker.speciesId) : null;
+    if (step === 0) return { targetIndex: target.cell.index, step, speciesId: null, title: "Bu yuva kilitlendi", copy: `${location} için uygun kuş kalmamış. Daha önce koyduğun kuşlardan biri satırı veya sütunu kapatıyor.` };
+    if (step === 1 || !editableBlocker) return { targetIndex: target.cell.index, step, speciesId: null, title: "Önce alan aç", copy: "Bu satır ve sütunda kendi yerleştirdiğin kuşları karşılaştır; birini geri alarak eksik tür için yer aç." };
+    return { targetIndex: target.cell.index, step, speciesId: null, title: "Geri alınacak yeri bul", copy: `${editableBlocker.row + 1}. satırdaki ${editableBlocker.col + 1}. yuvaya koyduğun ${blockerBird?.name || "kuşu"} geri almayı dene.` };
+  }
+  if (step === 0) {
+    return {
+      targetIndex: target.cell.index,
+      step,
+      speciesId: null,
+      title: `${target.cell.row + 1}. satıra odaklan`,
+      copy: `${location} parlıyor. Önce bu satırda ve sütunda bulunan kuşları ele; tekrar eden kuş olamaz.`
+    };
+  }
+  if (step === 1) {
+    const copy = names.length === 1
+      ? `Eledikten sonra bu yuvaya yalnız ${names[0]} kalıyor.`
+      : `Bu yuva için güçlü adaylar: ${names.slice(0, 3).join(" ve ")}. Sütundaki kuşları bir kez daha karşılaştır.`;
+    return { targetIndex: target.cell.index, step, speciesId: names.length === 1 ? target.cell.solutionId : null, title: "Adayları daralt", copy };
+  }
+  const suggestedId = target.choices.includes(target.cell.solutionId) ? target.cell.solutionId : target.choices[0];
+  const suggestedBird = species.find((item) => item.id === suggestedId) || bird;
+  return {
+    targetIndex: target.cell.index,
+    step,
+    speciesId: suggestedId,
+    title: "Son düşünme adımı",
+    copy: `${location} için uygun seçim ${suggestedBird.name}. Kuşu aşağıdan sen seçip yuvaya yerleştir.`
+  };
 }
 
 export function isGridSolved(game) {
@@ -187,6 +261,10 @@ export function makeWordStage(level, daily = false, date = new Date()) {
     daily,
     status: "playing",
     wordState: makeWordState(level, daily, date),
+    hints: 3,
+    rewardedHintUsed: false,
+    hintStep: 0,
+    activeHint: null,
     helpsUsed: 0,
     busy: false
   };
@@ -212,7 +290,8 @@ export function makeLogicStage(level, daily = false, date = new Date()) {
   const baseGivens = size === 4 ? 7 : size === 5 ? 10 : 15;
   const challengeStep = size === 4 ? Math.floor((day - 1) / 5) : Math.floor((day - 1) / 18);
   const givenCount = Math.max(size, baseGivens - (challengeStep % 4));
-  const givenIndices = chooseGivens(size, givenCount, rng);
+  const tutorial = day <= 2 ? chooseTutorialGivens(size, givenCount, rng, day) : null;
+  const givenIndices = tutorial?.givenIndices || chooseGivens(size, givenCount, rng);
   const cells = solution.map((solutionId, index) => ({
     index,
     row: Math.floor(index / size),
@@ -231,9 +310,13 @@ export function makeLogicStage(level, daily = false, date = new Date()) {
     size,
     speciesIds: available.map((bird) => bird.id),
     cells,
+    tutorialTargetIndex: tutorial?.targetIndex ?? null,
     selectedSpeciesId: null,
     history: [],
     hints: 3,
+    rewardedHintUsed: false,
+    hintTrail: null,
+    activeHint: null,
     clears: 2,
     helpsUsed: 0,
     undoCount: 0,
@@ -242,6 +325,24 @@ export function makeLogicStage(level, daily = false, date = new Date()) {
     mission: missionForLevel(level),
     busy: false
   };
+}
+
+function chooseTutorialGivens(size, count, rng, day) {
+  const teachesColumn = day === 2;
+  const targetIndex = teachesColumn ? (size - 1) * size : size - 1;
+  const selected = new Set();
+  if (teachesColumn) {
+    for (let row = 0; row < size - 1; row += 1) selected.add(row * size);
+    for (let col = 1; col < size; col += 1) selected.add(((col + 1) % size) * size + col);
+  } else {
+    for (let col = 0; col < size - 1; col += 1) selected.add(col);
+    for (let row = 1; row < size; row += 1) selected.add(row * size + ((row + 1) % size));
+  }
+  for (const index of shuffledRange(size * size, rng)) {
+    if (selected.size >= count) break;
+    if (index !== targetIndex) selected.add(index);
+  }
+  return { givenIndices: selected, targetIndex };
 }
 
 // Eski entegrasyonlar için mantık bulmacası üreticisinin uyumlu adı.

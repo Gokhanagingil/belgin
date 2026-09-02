@@ -49,6 +49,20 @@ async function solveWord(document, levelNumber) {
   await pause();
 }
 
+async function solveFleet(document) {
+  const directions = ["left", "up", "right", "down"];
+  for (let move = 0; move < 500 && !document.querySelector(".result-copy"); move += 1) {
+    const button = document.querySelector(`[data-fleet-direction="${directions[move % directions.length]}"]`);
+    assert.ok(button, "fleet direction controls should remain available");
+    button.click();
+    await pause(2);
+    const rescue = document.querySelector("[data-reset-fleet]");
+    if (rescue) rescue.click();
+  }
+  await pause();
+  assert.ok(document.querySelector(".result-copy"), "fleet mission should finish automatically");
+}
+
 test("production output targets the GitHub Pages project path", async () => {
   const html = await readFile(new URL("../dist/index.html", import.meta.url), "utf8");
   const privacy = await readFile(new URL("../dist/privacy.html", import.meta.url), "utf8");
@@ -63,8 +77,10 @@ test("one garden day connects logic, word and village progression", async () => 
   const { document } = window;
 
   assert.match(document.body.textContent, /Kuş Köyü/);
+  assert.match(document.querySelector('[data-action="play"]').textContent, /Oyuna başla/);
+  assert.doesNotMatch(document.querySelector('[data-action="play"]').textContent, /Kaldığın yerden/);
   assert.match(document.body.textContent, /1\/400 gün/);
-  assert.equal(document.querySelectorAll(".route-step").length, 2);
+  assert.equal(document.querySelectorAll(".route-step").length, 3);
   assert.equal(document.querySelectorAll("[data-route]").length, 0);
   assert.ok(document.querySelector('[aria-label="Köy kaynakları"]'));
 
@@ -72,17 +88,31 @@ test("one garden day connects logic, word and village progression", async () => 
   assert.equal(document.querySelectorAll(".logic-cell").length, 16);
   assert.equal(document.querySelectorAll(".palette-bird").length, 4);
   assert.equal(document.querySelectorAll(".bird-tile").length, 0, "the old triple-match board must not return");
-  assert.match(document.body.textContent, /her kuş yalnızca bir kez/i);
+  assert.match(document.body.textContent, /her kuş.*yalnızca bir kez/i);
+  assert.match(document.querySelector(".tutorial-card").textContent, /Ders 1\/2/);
+  document.querySelector('[data-tutorial="start"]').click();
+  const guidedBird = document.querySelector(".palette-bird.is-guided");
+  const guidedCell = document.querySelector(".logic-cell.is-guided");
+  assert.ok(guidedBird && guidedCell);
+  guidedBird.click();
+  guidedCell.click();
+  document.querySelector('[data-tutorial="finish"]').click();
 
   await solveLogic(document, 1);
   assert.match(document.querySelector(".result-copy").textContent, /Bahçe dengelendi/);
   assert.match(document.querySelector(".result-breakdown").textContent, /Köy ödülü/);
   assert.match(document.querySelector(".auto-continue").textContent, /otomatik açılıyor/);
-  assert.equal(JSON.parse(window.localStorage.getItem("kus-bahcesi-save-v1")).level, 3);
+  assert.equal(JSON.parse(window.localStorage.getItem("kus-bahcesi-save-v1")).level, 2);
 
   await pause(4200);
+  assert.ok(document.querySelector(".fleet-screen"));
+  assert.equal(document.querySelectorAll(".fleet-tile").length, 16);
+  await solveFleet(document);
+  assert.match(document.querySelector(".result-copy").textContent, /Filo büyüdü/);
+  document.querySelector('[data-result="primary"]').click();
   assert.ok(document.querySelector(".word-stage"));
   assert.match(document.body.textContent, /Gizli sözcüğü bul/);
+  assert.match(document.querySelector('[data-action="word-back"]').textContent, /Geri al/);
 
   await solveWord(document, 3);
   assert.match(document.querySelector(".result-copy").textContent, /Bahçe konuştu/);
@@ -109,15 +139,48 @@ test("an unfinished placement resumes exactly where it was left", async () => {
   const window = await bootApp();
   const { document } = window;
   document.querySelector('[data-action="play"]').click();
-  const palette = document.querySelector(".palette-bird:not(:disabled)");
+  document.querySelector('[data-tutorial="start"]').click();
+  const palette = document.querySelector(".palette-bird.is-guided");
   palette.click();
   const speciesId = palette.dataset.species;
-  document.querySelector(".logic-cell:not(.is-given)").click();
+  document.querySelector(".logic-cell.is-guided").click();
   document.querySelector('[data-action="home"]').click();
   assert.match(document.querySelector('[data-action="play"]').textContent, /Kaldığın yerden/);
   document.querySelector('[data-action="play"]').click();
   assert.ok(document.querySelector(".logic-cell:not(.is-given) svg"));
   assert.ok(document.querySelector(`[data-species="${speciesId}"]`));
+  window.close();
+});
+
+test("logic hints coach without placing birds and reveal the rewarded fourth option", async () => {
+  const window = await bootApp({ save: { level: 1, hasStarted: true, logicTutorialDays: [1] } });
+  const { document } = window;
+  document.querySelector('[data-action="play"]').click();
+  const countBirds = () => document.querySelectorAll(".logic-cell.is-filled").length;
+  const before = countBirds();
+  for (let hint = 0; hint < 3; hint += 1) {
+    document.querySelector('[data-action="hint"]').click();
+    assert.equal(countBirds(), before, "a hint must never solve the cell automatically");
+    assert.ok(document.querySelector(".hint-coach"));
+  }
+  assert.match(document.querySelector('[data-action="reward-hint"]').textContent, /30 sn reklam/);
+  window.close();
+});
+
+test("the word game has a visible undo and non-placing clues", async () => {
+  const window = await bootApp({ save: { level: 3, hasStarted: true } });
+  const { document } = window;
+  document.querySelector('[data-action="play"]').click();
+  const letter = document.querySelector(".letter-button:not(:disabled)");
+  letter.click();
+  assert.equal(document.querySelectorAll(".answer-slot.is-filled").length, 1);
+  const undo = document.querySelector('[data-action="word-back"]');
+  assert.match(undo.textContent, /Geri al/);
+  undo.click();
+  assert.equal(document.querySelectorAll(".answer-slot.is-filled").length, 0);
+  document.querySelector('[data-action="word-hint"]').click();
+  assert.equal(document.querySelectorAll(".answer-slot.is-filled").length, 0, "a word hint must not enter a letter");
+  assert.match(document.querySelector(".word-hint-coach").textContent, /başlıyor/i);
   window.close();
 });
 
@@ -137,7 +200,7 @@ test("a legacy in-progress puzzle never corrupts the current journey", async () 
   window.close();
 });
 
-test("an in-progress workshop save is discarded and resumes at the word game", async () => {
+test("an in-progress workshop save is discarded and opens the new fleet game", async () => {
   const window = await bootApp({
     save: {
       level: 2,
@@ -148,11 +211,11 @@ test("an in-progress workshop save is discarded and resumes at the word game", a
   const { document } = window;
   assert.doesNotMatch(document.querySelector('[data-action="play"]').textContent, /Kaldığın yerden/);
   const stored = JSON.parse(window.localStorage.getItem("kus-bahcesi-save-v1"));
-  assert.equal(stored.level, 3);
-  assert.deepEqual(stored.skipped, [2]);
+  assert.equal(stored.level, 2);
+  assert.deepEqual(stored.skipped, []);
   assert.equal(stored.currentGame, null);
   document.querySelector('[data-action="play"]').click();
-  assert.ok(document.querySelector(".word-stage"));
+  assert.ok(document.querySelector(".fleet-screen"));
   assert.equal(document.querySelectorAll(".order-screen").length, 0);
   window.close();
 });
@@ -167,7 +230,7 @@ test("a legacy full-route preference cannot re-enable the workshop", async () =>
   });
   const { document } = window;
   assert.equal(document.querySelectorAll("[data-route]").length, 0);
-  assert.equal(document.querySelectorAll(".route-step").length, 2);
+  assert.equal(document.querySelectorAll(".route-step").length, 3);
   assert.doesNotMatch(document.body.textContent, /Sipariş|Üçlü Bahçe Günü/);
   const stored = JSON.parse(window.localStorage.getItem("kus-bahcesi-save-v1"));
   assert.equal(stored.skipOrders, true);
