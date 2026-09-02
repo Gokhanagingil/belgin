@@ -14,11 +14,11 @@ on:
       version_code:
         description: Increasing Play Store version code
         required: true
-        default: "2"
+        default: "3"
       version_name:
         description: User-visible version
         required: true
-        default: "1.1.0"
+        default: "1.2.0"
   pull_request:
     paths:
       - "android/**"
@@ -51,8 +51,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      VERSION_CODE_INPUT: ${{ inputs.version_code || '2' }}
-      VERSION_NAME_INPUT: ${{ inputs.version_name || '1.1.0' }}
+      VERSION_CODE_INPUT: ${{ inputs.version_code || '3' }}
+      VERSION_NAME_INPUT: ${{ inputs.version_name || '1.2.0' }}
       ADMOB_APP_ID: ${{ vars.ADMOB_APP_ID }}
       ADMOB_BANNER_ID: ${{ vars.ADMOB_BANNER_ID }}
       ADMOB_REWARDED_ID: ${{ vars.ADMOB_REWARDED_ID }}

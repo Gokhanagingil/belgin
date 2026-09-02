@@ -17,7 +17,7 @@ Kuşları düzenle, filonu büyüt, sözcükleri çöz; sakin köyünü gün gü
 
 Kuş Köyü, acele ettirmeyen üç farklı zihin oyununu yaşayan bir köy yolculuğunda buluşturur.
 
-Sabah Kuş Düzeni’nde her kuşu satır ve sütunlara dikkatle yerleştir. Öğlen Büyük Filo’da aynı tekneleri birleştirerek sandaldan transatlantiğe uzanan filonu kur. Akşam Gizli Sözcük’te ipucunu düşün, karışık harfleri doğru sıraya getir. Her başarı köyüne yeni kaynaklar kazandırır; kuş albümün, filo defterin ve yapılarının gelişimi kalıcı olarak saklanır.
+Sabah Kuş Düzeni’nde her kuşu satır ve sütunlara dikkatle yerleştir. Öğlen Büyük Filo’da yön tuşu kullanmadan denizin üzerinde parmağını kaydır; aynı tekneleri birleştirerek sandaldan transatlantiğe uzanan filonu kur. Görsel öğretici ve açıklayıcı hamle mesajları oyunu adım adım tanıtır. Akşam Gizli Sözcük’te ipucunu düşün, karışık harfleri doğru sıraya getir. Her başarı köyüne yeni kaynaklar kazandırır; kuş albümün, filo defterin ve yapılarının gelişimi kalıcı olarak saklanır.
 
 **Sakin ama düşündüren oyun**
 

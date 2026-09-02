@@ -58,8 +58,10 @@ test("fleet slides, merges, spawns and undo stay deterministic", () => {
   assert.deepEqual(left.board.slice(0, 4), [2, 2, 0, 0], "a tile can merge only once per move");
   assert.deepEqual(left.board.slice(4, 8), [3, 0, 0, 0]);
   assert.equal(left.merges, 4);
+  assert.deepEqual(left.createdRanks, [2, 2, 3, 4]);
 
   const game = makeFleetStage(2);
+  assert.deepEqual(game.board.slice(4, 8), [0, 1, 1, 0], "the first fleet move should teach a guaranteed merge");
   const before = [...game.board];
   const direction = ["left", "right", "up", "down"].find((item) => slideFleet(game.board, item).moved);
   assert.ok(direction);

@@ -13,7 +13,7 @@
 Her Bahçe Günü üç farklı zihinsel aşama sunar:
 
 1. **Sabah · Kuş Düzeni:** Her kuş türünü her satır ve sütunda yalnızca bir kez kullanarak bahçeyi tamamla.
-2. **Öğle · Büyük Filo:** Aynı gemileri birleştir; minik kayıktan transatlantiğe uzanan kalıcı filonu büyüt.
+2. **Öğle · Büyük Filo:** Mavi denizin üzerinde parmağını kaydır, aynı gemileri birleştir; minik kayıktan transatlantiğe uzanan kalıcı filonu büyüt. İlk açılıştaki görsel öğretici ve hamle açıklamaları sayı kullanmadan oyunu tanıtır.
 3. **Akşam · Gizli Sözcük:** İpucunu oku ve karışık harfleri doğru sıraya koy.
 
 Atölye Siparişleri oyuncu akışında kapalıdır. Eski sipariş kayıtları temizlenir ve aynı bölüm numarası yeni Büyük Filo oyunuyla açılır.
@@ -30,6 +30,7 @@ Yanlış hamleler can ya da puan kaybettirmez. Süre sınırı yoktur; oyuncu de
 - Tarihe bağlı günlük özel görev
 - Otomatik kayıt; üç oyun türünün de ortasından devam
 - 12 kuşluk keşif albümü
+- Yön tuşu gerektirmeyen kaydırma kontrolü, etkileşimli ilk oyun öğreticisi ve açıklamalı hamle geri bildirimi
 - 10 kademeli, kalıcı Filo Defteri ve kayıktan transatlantiğe gemi yolculuğu
 
 ## UX ve erişilebilirlik
